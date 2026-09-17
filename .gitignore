@@ -6,3 +6,9 @@ coverage/
 !.env.example
 *.log
 .DS_Store
+.cache/
+.runtime/
+assets/*.wad
+assets/*.wasm
+artifacts/
+.data/

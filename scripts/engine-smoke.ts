@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { DoomEngine } from '../packages/game-bridge/src/engine.ts';
+const game = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad');
+const before = game.state();
+const after = game.step({ ticks: 35, inputs: ['forward'] });
+assert.equal(after.tick - before.tick, 35);
+assert.ok(after.x !== before.x || after.y !== before.y, 'actual engine must move');
+await mkdir('artifacts', { recursive: true });
+await writeFile('artifacts/engine.png', game.frame());
+console.log(JSON.stringify({ before, after }, null, 2));

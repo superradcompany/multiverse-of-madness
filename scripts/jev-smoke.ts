@@ -1,0 +1,14 @@
+import { DoomEngine } from '../packages/game-bridge/src/engine.ts';
+import assert from 'node:assert/strict';
+import { ExperienceMemory } from '../apps/server/src/experience.ts';
+import { Jev } from '../apps/server/src/jev.ts';
+const engine = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad');
+const before = engine.state();
+const after = engine.step({ ticks: 35, inputs: [] });
+const memory = new ExperienceMemory();
+memory.remember('smoke-world', 'wait briefly', before, after);
+const attempts = memory.relevant(before);
+assert.equal(attempts.length, 1);
+const decision = await new Jev().decide(before, 'stay alive and reach the exit', [], AbortSignal.timeout(15000), attempts);
+assert.equal(decision.experienceUsed, 1);
+console.log(JSON.stringify(decision, null, 2));
