@@ -2,7 +2,7 @@ import './runtime-env.ts';
 import './build-bridge.ts';
 import { readFile, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { createWorld, reconnectWorld } from '../apps/server/src/runtime.ts';
+import { createWorld, reconnectWorld } from '../examples/doom/server/src/runtime.ts';
 if (process.argv[2] === 'create') {
   const source = await createWorld(`mom-detached-${Date.now()}`);
   const [child] = await source.branch([`${source.id}-child`]);

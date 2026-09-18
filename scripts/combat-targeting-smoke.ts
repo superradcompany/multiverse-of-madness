@@ -5,12 +5,12 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
-import { Session } from '../apps/server/src/session.ts';
-import { createWorld } from '../apps/server/src/runtime.ts';
-import { candidatePlans } from '../apps/server/src/doom-plans.ts';
-import { geometryFor } from '../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../apps/server/src/doom-navigation.ts';
-import { decision } from '../apps/server/test-support/fixture-runtime.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { createWorld } from '../examples/doom/server/src/runtime.ts';
+import { candidatePlans } from '../examples/doom/server/src/doom-plans.ts';
+import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../examples/doom/server/src/doom-navigation.ts';
+import { decision } from '../examples/doom/server/test-support/fixture-runtime.ts';
 
 // Real VMs and game inputs; scripted judgments isolate candidate execution.
 // This proves the new attack is executable, not a Jev win-rate improvement.

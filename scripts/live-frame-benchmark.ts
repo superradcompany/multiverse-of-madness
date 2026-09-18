@@ -1,10 +1,10 @@
 import './runtime-env.ts';
 import './build-bridge.ts';
 import { writeFile, mkdir } from 'node:fs/promises';
-import { Session } from '../apps/server/src/session.ts';
-import { Jev } from '../apps/server/src/jev.ts';
-import { createWorld } from '../apps/server/src/runtime.ts';
-import type { SessionView } from '../packages/contracts/src/session.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { Jev } from '../examples/doom/server/src/jev.ts';
+import { createWorld } from '../examples/doom/server/src/runtime.ts';
+import type { SessionView } from '../examples/doom/contracts/src/session.ts';
 const session = new Session(new Jev());
 const samples = new Map<string, { first: number; last: number; version: number; frames: number }>();
 session.on('change', (view: SessionView) => {

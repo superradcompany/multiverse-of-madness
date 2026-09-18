@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import { actions, type Decision } from '../../apps/server/src/jev.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { doomInputs } from '../../apps/server/src/doom-controls.ts';
-import type { GameState, Step } from '../../packages/contracts/src/game.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import { actions, type Decision } from '../../examples/doom/server/src/jev.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { doomInputs } from '../../examples/doom/server/src/doom-controls.ts';
+import type { GameState, Step } from '../../examples/doom/contracts/src/game.ts';
 
 // Diagnostic read of the pinned engine's independent event and object exports.
 // No player/map state is edited. Event clearing only drains the host event buffer.

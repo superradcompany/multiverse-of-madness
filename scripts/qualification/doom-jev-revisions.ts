@@ -5,16 +5,16 @@ import { join, resolve } from 'node:path';
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../../apps/server/src/doom-learning-models.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import { decisionStatistics } from '../../apps/server/src/decision-context.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import { decisionStatistics } from '../../examples/doom/server/src/decision-context.ts';
 
 // Two live API calls over local WASM observations. No game VM, activation or gameplay-quality claim.
 const root = resolve(`artifacts/doom-jev-revisions/${new Date().toISOString().replaceAll(':', '-')}`);
 const save = <T>(name: string, value: T) => new JsonFileStore(join(root, name), value => value as T).save(value);
-const hashes = Object.fromEntries(await Promise.all(['apps/server/src/jev.ts', 'apps/server/src/jev-learning.ts',
-  'apps/server/src/doom-learning-models.ts', 'apps/server/src/decision-context.ts', 'package-lock.json',
+const hashes = Object.fromEntries(await Promise.all(['examples/doom/server/src/jev.ts', 'examples/doom/server/src/jev-learning.ts',
+  'examples/doom/server/src/doom-learning-models.ts', 'examples/doom/server/src/decision-context.ts', 'package-lock.json',
   'assets/wasmdoom.wasm', 'assets/freedoom1.wad', import.meta.filename].map(async file => [file, createHash('sha256').update(await readFile(file)).digest('hex')])));
 const budget = new BudgetLedger({ simulationUnit: 'doom-ticks', limits: { modelCalls: 2, simulation: 0 } }, value => save('budget.json', value));
 let calls = 0;

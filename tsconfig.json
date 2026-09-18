@@ -19,7 +19,6 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "apps",
     "packages",
     "scripts",
     "examples"

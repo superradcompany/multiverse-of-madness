@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
 import { WorldLifecycle, type WorldMetadata } from '@multiverse/gameplay-harness';
-import { createWorld, type WorldRuntime } from '../apps/server/src/runtime.ts';
+import { createWorld, type WorldRuntime } from '../examples/doom/server/src/runtime.ts';
 
 type World = { meta: WorldMetadata; runtime?: WorldRuntime };
 const directory = await mkdtemp(join(tmpdir(), 'mom-promotion-smoke-'));

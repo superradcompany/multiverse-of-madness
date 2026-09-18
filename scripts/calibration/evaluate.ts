@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import type { GameState, Step } from '../../packages/contracts/src/game.ts';
-import { actions, type ActionId, type Decision } from '../../apps/server/src/jev.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import type { GameState, Step } from '../../examples/doom/contracts/src/game.ts';
+import { actions, type ActionId, type Decision } from '../../examples/doom/server/src/jev.ts';
 import { LabJev as Jev, type LabProfile as JevProfile } from './lab-jev.ts';
-import { outcomeScore } from '../../apps/server/src/session.ts';
+import { outcomeScore } from '../../examples/doom/server/src/session.ts';
 
 type Case = { id: string; split: 'development' | 'heldout'; trajectory: number; trace: Step[]; state: GameState; history: GameState[]; outcomes: Record<ActionId, { state: GameState; score: number }> };
 type Row = { caseId: string; profile: JevProfile; decision: Decision; score: number; regret: number; acceptable: boolean; best: number; error?: string };

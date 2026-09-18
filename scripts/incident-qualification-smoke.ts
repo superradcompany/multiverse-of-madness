@@ -6,16 +6,16 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { TypeSafeClient } from '@typesafe-ai/sdk';
 import { ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomLearningIncidents, decodeDoomIncidents } from '../apps/server/src/doom-learning-incidents.ts';
-import { DoomVmEvaluations } from '../apps/server/src/doom-vm-evaluations.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../apps/server/src/doom-learning-models.ts';
-import { microsandboxEvaluationVmPorts } from '../apps/server/src/doom-evaluation-vm-provider.ts';
-import { doomLearningDirectory } from '../apps/server/src/doom-learning-lineage.ts';
-import { decodeDoomLearningManifest } from '../apps/server/src/doom-learning-manifest.ts';
-import { doomSurvivalProgress } from '../apps/server/src/doom-revision-evaluation.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { Session, sessionContinuation } from '../apps/server/src/session.ts';
-import { Jev } from '../apps/server/src/jev.ts';
+import { DoomLearningIncidents, decodeDoomIncidents } from '../examples/doom/server/src/doom-learning-incidents.ts';
+import { DoomVmEvaluations } from '../examples/doom/server/src/doom-vm-evaluations.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../examples/doom/server/src/doom-learning-models.ts';
+import { microsandboxEvaluationVmPorts } from '../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { doomLearningDirectory } from '../examples/doom/server/src/doom-learning-lineage.ts';
+import { decodeDoomLearningManifest } from '../examples/doom/server/src/doom-learning-manifest.ts';
+import { doomSurvivalProgress } from '../examples/doom/server/src/doom-revision-evaluation.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { Session, sessionContinuation } from '../examples/doom/server/src/session.ts';
+import { Jev } from '../examples/doom/server/src/jev.ts';
 
 // Real VM capture/restore and evaluation; deterministic model responses isolate lifecycle verification.
 const data = resolve(process.argv[2]!);

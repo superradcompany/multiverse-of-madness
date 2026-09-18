@@ -5,10 +5,10 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
-import { Session } from '../apps/server/src/session.ts';
-import { checkpoints } from '../apps/server/src/checkpoints.ts';
-import { createWorld } from '../apps/server/src/runtime.ts';
-import { decision } from '../apps/server/test-support/fixture-runtime.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { checkpoints } from '../examples/doom/server/src/checkpoints.ts';
+import { createWorld } from '../examples/doom/server/src/runtime.ts';
+import { decision } from '../examples/doom/server/test-support/fixture-runtime.ts';
 
 // Actual Doom VMs/forks/checkpoint capture. Scripted decisions qualify lifecycle,
 // not Jev behavior or gameplay strength. Never opens the user's live session.

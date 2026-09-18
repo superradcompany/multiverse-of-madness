@@ -5,15 +5,15 @@ import { createHash, randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { BudgetLedger, RevisionController, type EvaluationContract, type LearningRevision } from '@multiverse/gameplay-harness';
 import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { decodeDoomProposal } from '../../apps/server/src/doom-supervisor-proposal.ts';
-import { decodeDoomSupervisor } from '../../apps/server/src/doom-supervisor.ts';
-import { DoomLearningModels } from '../../apps/server/src/doom-learning-models.ts';
-import { DoomExecutableModel } from '../../apps/server/src/doom-executor-model.ts';
-import { qualifyDoomRevision, doomSurvivalProgress, type DoomEvaluationContext, type DoomEvaluationOptions } from '../../apps/server/src/doom-revision-evaluation.ts';
+import { decodeDoomProposal } from '../../examples/doom/server/src/doom-supervisor-proposal.ts';
+import { decodeDoomSupervisor } from '../../examples/doom/server/src/doom-supervisor.ts';
+import { DoomLearningModels } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { DoomExecutableModel } from '../../examples/doom/server/src/doom-executor-model.ts';
+import { qualifyDoomRevision, doomSurvivalProgress, type DoomEvaluationContext, type DoomEvaluationOptions } from '../../examples/doom/server/src/doom-revision-evaluation.ts';
 import { MicrosandboxExecutor, type ExecutorRunRecord } from '../../packages/executor-microsandbox/src/executor.ts';
-import type { DoomPolicy } from '../../apps/server/src/doom-policy.ts';
-import type { WorldRuntime } from '../../apps/server/src/runtime.ts';
-import type { Step } from '../../packages/contracts/src/game.ts';
+import type { DoomPolicy } from '../../examples/doom/server/src/doom-policy.ts';
+import type { WorldRuntime } from '../../examples/doom/server/src/runtime.ts';
+import type { Step } from '../../examples/doom/contracts/src/game.ts';
 import { EvaluationWorld } from './doom-runtime.ts';
 
 if (!process.argv[2]) throw new Error('Usage: doom-revision.ts <proposal.json>');
@@ -27,7 +27,7 @@ const baseline = proposal.request.current, candidate = proposal.candidate;
 const root = resolve('artifacts/doom-revision-evaluation', new Date().toISOString().replaceAll(':', '-'));
 await mkdir(root, { recursive: true });
 const write = <T>(file: string, value: T) => new JsonFileStore(join(root, file), value => value as T).save(value);
-const sourceRoots = ['apps/server/src', 'packages/contracts/src', 'packages/game-bridge/src', 'packages/executor-microsandbox/src', 'harness/src', 'scripts/evaluation'];
+const sourceRoots = ['examples/doom/server/src', 'examples/doom/contracts/src', 'examples/doom/bridge/src', 'packages/executor-microsandbox/src', 'harness/src', 'scripts/evaluation'];
 const files = ['assets/wasmdoom.wasm', 'assets/freedoom1.wad', 'package-lock.json', ...(
   await Promise.all(sourceRoots.map(async directory => (await readdir(directory, { recursive: true }))
     .filter(file => file.endsWith('.ts') && !file.endsWith('.test.ts')).map(file => join(directory, file))))).flat()].sort();

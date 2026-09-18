@@ -9,16 +9,16 @@ import { Image } from 'microsandbox';
 import { BudgetLedger, RevisionController, canonicalJson, compareRevisions, type BudgetSnapshot, type EvaluationContract, type ExecutorLimits, type LearningRevision, type RevisionJournal, type RevisionPorts } from '@multiverse/gameplay-harness';
 import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
 import { MicrosandboxExecutor, type ExecutorRunRecord } from '../../packages/executor-microsandbox/src/executor.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import { SessionStore } from '../../apps/server/src/persistence.ts';
-import { Recordings } from '../../apps/server/src/recordings.ts';
-import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld, type WorldRuntime } from '../../apps/server/src/runtime.ts';
-import { checkpoints } from '../../apps/server/src/checkpoints.ts';
-import { doomLearningBinding } from '../../apps/server/src/doom-learning.ts';
-import { DoomExecutableModel } from '../../apps/server/src/doom-executor-model.ts';
-import { actions } from '../../apps/server/src/jev.ts';
-import { parseDoomLearningPolicy, type DoomPolicy } from '../../apps/server/src/doom-policy.ts';
-import type { GameState } from '../../packages/contracts/src/game.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import { SessionStore } from '../../examples/doom/server/src/persistence.ts';
+import { Recordings } from '../../examples/doom/server/src/recordings.ts';
+import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld, type WorldRuntime } from '../../examples/doom/server/src/runtime.ts';
+import { checkpoints } from '../../examples/doom/server/src/checkpoints.ts';
+import { doomLearningBinding } from '../../examples/doom/server/src/doom-learning.ts';
+import { DoomExecutableModel } from '../../examples/doom/server/src/doom-executor-model.ts';
+import { actions } from '../../examples/doom/server/src/jev.ts';
+import { parseDoomLearningPolicy, type DoomPolicy } from '../../examples/doom/server/src/doom-policy.ts';
+import type { GameState } from '../../examples/doom/contracts/src/game.ts';
 
 // Controlled navigation integration: real Doom VMs and isolated TS, not autonomous discovery or level-completion quality.
 const phase = process.argv[2];
@@ -43,7 +43,7 @@ async function run(phase: string, root: string): Promise<void> {
   const write = <T>(file: string, data: T) => new JsonFileStore(join(root, file), value => value as T).save(data);
   const artifacts = new ExecutableStore(join(root, 'executables'));
   const manifestStore = new JsonFileStore(join(root, 'manifest.json'), value => value as Manifest);
-  const sourceRoots = ['apps/server/src', 'packages/contracts/src', 'packages/game-bridge/src', 'packages/executor-microsandbox/src', 'harness/src'];
+  const sourceRoots = ['examples/doom/server/src', 'examples/doom/contracts/src', 'examples/doom/bridge/src', 'packages/executor-microsandbox/src', 'harness/src'];
   const files = ['assets/wasmdoom.wasm', 'assets/freedoom1.wad', 'dist/bridge.mjs', 'package-lock.json', 'scripts/qualification/doom-revisions.ts',
     ...(await Promise.all(sourceRoots.map(async path => (await readdir(path, { recursive: true })).filter(file => file.endsWith('.ts') && !file.endsWith('.test.ts')).map(file => join(path, file))))).flat()].sort();
   const builds = Object.fromEntries(await Promise.all(files.map(async file => {

@@ -5,17 +5,17 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomEvaluationVms, decodeDoomEvaluationVms, doomIncidentCheckpoint } from '../apps/server/src/doom-evaluation-vms.ts';
-import { microsandboxEvaluationVmPorts } from '../apps/server/src/doom-evaluation-vm-provider.ts';
-import { doomLearningDirectory } from '../apps/server/src/doom-learning-lineage.ts';
-import { decodeDoomLearningManifest } from '../apps/server/src/doom-learning-manifest.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { candidatePlans, planInputs, startPlan } from '../apps/server/src/doom-plans.ts';
-import { geometryFor } from '../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs, planNavigationMemory, type NavigationMemory } from '../apps/server/src/doom-navigation.ts';
-import { Session } from '../apps/server/src/session.ts';
-import { actions, type ActionId } from '../apps/server/src/jev.ts';
-import { doomInputs } from '../apps/server/src/doom-controls.ts';
+import { DoomEvaluationVms, decodeDoomEvaluationVms, doomIncidentCheckpoint } from '../examples/doom/server/src/doom-evaluation-vms.ts';
+import { microsandboxEvaluationVmPorts } from '../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { doomLearningDirectory } from '../examples/doom/server/src/doom-learning-lineage.ts';
+import { decodeDoomLearningManifest } from '../examples/doom/server/src/doom-learning-manifest.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { candidatePlans, planInputs, startPlan } from '../examples/doom/server/src/doom-plans.ts';
+import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs, planNavigationMemory, type NavigationMemory } from '../examples/doom/server/src/doom-navigation.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { actions, type ActionId } from '../examples/doom/server/src/jev.ts';
+import { doomInputs } from '../examples/doom/server/src/doom-controls.ts';
 
 // Mechanical diagnostic, not an AI/evaluation score: execute the same observed
 // plan from one retained checkpoint with and without collision-recovery steering.

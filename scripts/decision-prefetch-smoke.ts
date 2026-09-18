@@ -1,11 +1,11 @@
 import './runtime-env.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { Session } from '../apps/server/src/session.ts';
-import { Jev } from '../apps/server/src/jev.ts';
-import { createWorld } from '../apps/server/src/runtime.ts';
-import { navigateDoomInputs } from '../apps/server/src/doom-navigation.ts';
-import { geometryFor } from '../apps/server/src/doom-geometry.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { Jev } from '../examples/doom/server/src/jev.ts';
+import { createWorld } from '../examples/doom/server/src/runtime.ts';
+import { navigateDoomInputs } from '../examples/doom/server/src/doom-navigation.ts';
+import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
 
 const session = new Session(new Jev('game-aware'), { threshold: 0, horizon: 140, branches: 2, paceMs: 1000 / 35, frameTicks: 1 });
 session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));

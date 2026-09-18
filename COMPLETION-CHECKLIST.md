@@ -231,7 +231,7 @@ Doodle Shooter is a candidate, not an already working or source-accessible adapt
 
 - [ ] Audit remaining game/provider/runtime assumptions and keep mechanics in
   adapters, orchestration in the harness, and executables isolated from the host.
-- [ ] Finish the independently usable harness checkout/submodule integration and
+- [x] Finish the independently usable harness package in the single repository and
   verify a clean install/build/test plus documented game-adapter onboarding.
 - [ ] Consolidate stale milestone prose into current architecture, run instructions,
   supported behavior and limitations. Keep exact qualification evidence linked.
@@ -244,8 +244,14 @@ ESM/declarations, installs the tarball in an external consumer, typechecks with
 library checking enabled, and executes public routing/trials/durable storage.
 `harness/ADAPTERS.md` documents the mechanics/host boundary, capabilities,
 cancellation, persistence, learning and qualification requirements. This passed
-on Node 26.3.1 without using the app's node_modules. The parent has no registered
-gitlink yet, so reproducible shared submodule checkout remains incomplete.
+on Node 26.3.1 without using the app's node_modules. By user direction, delivery
+is now one repository: `harness/` is a normal tracked npm workspace, the concrete
+executor and supervisor providers live in `packages/`, and Doom and chess are
+peers under `examples/`. A clean checkout passed a single root `npm ci`, typecheck,
+production build and web tests. Download/setup and a real three-VM Doom fork smoke
+passed; the chess launch command served its paused fixture and browser assets.
+The application and harness suites passed 378 and 120 tests respectively. The root
+README documents `demo:doom` and `demo:chess`; detailed guides live with each example.
 Evidence: `artifacts/harness-package/2026-09-18/`.
 
 Completion requires the unchecked items above, not a fixed number of passing

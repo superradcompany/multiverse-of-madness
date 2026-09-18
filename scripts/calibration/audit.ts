@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { doomInputs } from '../../apps/server/src/doom-controls.ts';
-import { actions, type Decision } from '../../apps/server/src/jev.ts';
-import type { GameState, Step } from '../../packages/contracts/src/game.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { doomInputs } from '../../examples/doom/server/src/doom-controls.ts';
+import { actions, type Decision } from '../../examples/doom/server/src/jev.ts';
+import type { GameState, Step } from '../../examples/doom/contracts/src/game.ts';
 
 const root = process.argv[2] ?? 'artifacts/calibration/validated';
 for (const name of (await readdir(root)).filter(n => /^play-.*\.json$/.test(n))) {

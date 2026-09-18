@@ -8,15 +8,15 @@ import { TypeSafeClient } from '@typesafe-ai/sdk';
 import type { BudgetLedger, EvaluationContract } from '@multiverse/gameplay-harness';
 import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
 import { MicrosandboxExecutor, type ExecutorRunRecord } from '../../packages/executor-microsandbox/src/executor.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../../apps/server/src/doom-learning-models.ts';
-import { DoomPreparedModel } from '../../apps/server/src/doom-prepared-model.ts';
-import { decodeDoomProposal } from '../../apps/server/src/doom-supervisor-proposal.ts';
-import { readDoomLearningBuild, retainDoomLearningBuild } from '../../apps/server/src/doom-learning-build.ts';
-import { DoomVmEvaluations, type DoomVmScenario } from '../../apps/server/src/doom-vm-evaluations.ts';
-import { microsandboxEvaluationVmPorts } from '../../apps/server/src/doom-evaluation-vm-provider.ts';
-import { doomSurvivalProgress } from '../../apps/server/src/doom-revision-evaluation.ts';
-import { decodeDoomEvaluationVms } from '../../apps/server/src/doom-evaluation-vms.ts';
-import type { DoomEvaluationContext } from '../../apps/server/src/doom-revision-evaluation.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { DoomPreparedModel } from '../../examples/doom/server/src/doom-prepared-model.ts';
+import { decodeDoomProposal } from '../../examples/doom/server/src/doom-supervisor-proposal.ts';
+import { readDoomLearningBuild, retainDoomLearningBuild } from '../../examples/doom/server/src/doom-learning-build.ts';
+import { DoomVmEvaluations, type DoomVmScenario } from '../../examples/doom/server/src/doom-vm-evaluations.ts';
+import { microsandboxEvaluationVmPorts } from '../../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { doomSurvivalProgress } from '../../examples/doom/server/src/doom-revision-evaluation.ts';
+import { decodeDoomEvaluationVms } from '../../examples/doom/server/src/doom-evaluation-vms.ts';
+import type { DoomEvaluationContext } from '../../examples/doom/server/src/doom-revision-evaluation.ts';
 
 // A fresh matched experiment, not a qualification under the original proposal's
 // unrelated diagnostic contract. Neither revision is activated in any live game.

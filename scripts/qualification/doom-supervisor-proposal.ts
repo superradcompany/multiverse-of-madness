@@ -5,23 +5,23 @@ import { join, resolve } from 'node:path';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { ExecutableStore, JsonFileStore, contentRevision } from '@multiverse/gameplay-harness/node';
 import { ClaudeCodeSupervisor, SupervisorFailure } from '../../packages/supervisor-claude/src/provider.ts';
-import { DoomSupervisor, decodeDoomSupervisor } from '../../apps/server/src/doom-supervisor.ts';
-import { DoomLearningModels } from '../../apps/server/src/doom-learning-models.ts';
-import { decodeDoomProposal, doomProposalKindSchema, generateDoomProposal, type DoomProposalEvidence } from '../../apps/server/src/doom-supervisor-proposal.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import { SessionStore } from '../../apps/server/src/persistence.ts';
-import { Jev, type DecisionMaker } from '../../apps/server/src/jev.ts';
-import type { DoomPolicy } from '../../apps/server/src/doom-policy.ts';
+import { DoomSupervisor, decodeDoomSupervisor } from '../../examples/doom/server/src/doom-supervisor.ts';
+import { DoomLearningModels } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { decodeDoomProposal, doomProposalKindSchema, generateDoomProposal, type DoomProposalEvidence } from '../../examples/doom/server/src/doom-supervisor-proposal.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import { SessionStore } from '../../examples/doom/server/src/persistence.ts';
+import { Jev, type DecisionMaker } from '../../examples/doom/server/src/jev.ts';
+import type { DoomPolicy } from '../../examples/doom/server/src/doom-policy.ts';
 import { EvaluationWorld } from '../evaluation/doom-runtime.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../../apps/server/src/doom-navigation.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../../examples/doom/server/src/doom-navigation.ts';
 
 // Real Doom WASM observations and real model requests; no VM forks, independent evaluation or activation.
 const kind = doomProposalKindSchema.optional().parse(process.argv.find(arg => arg.startsWith('--kind='))?.slice(7));
 const root = resolve('artifacts/doom-supervisor-proposal', new Date().toISOString().replaceAll(':', '-'));
 const write = <T>(name: string, value: T) => new JsonFileStore(join(root, name), value => value as T).save(value);
-const files = ['apps/server/src/doom-supervisor-proposal.ts', 'apps/server/src/doom-supervisor.ts', 'apps/server/src/doom-learning-models.ts',
-  'apps/server/src/jev.ts', 'apps/server/src/jev-learning.ts', 'apps/server/src/session.ts', 'apps/server/src/doom-policy.ts',
+const files = ['examples/doom/server/src/doom-supervisor-proposal.ts', 'examples/doom/server/src/doom-supervisor.ts', 'examples/doom/server/src/doom-learning-models.ts',
+  'examples/doom/server/src/jev.ts', 'examples/doom/server/src/jev-learning.ts', 'examples/doom/server/src/session.ts', 'examples/doom/server/src/doom-policy.ts',
   'scripts/evaluation/doom-runtime.ts', 'packages/supervisor-claude/src/provider.ts', 'packages/supervisor-claude/src/process.ts',
   'assets/wasmdoom.wasm', 'assets/freedoom1.wad', 'package-lock.json', import.meta.filename];
 const builds = Object.fromEntries(await Promise.all(files.map(async file => [file, createHash('sha256').update(await readFile(file)).digest('hex')])));

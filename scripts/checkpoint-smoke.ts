@@ -1,11 +1,11 @@
 import './runtime-env.ts';
 import './build-bridge.ts';
 import assert from 'node:assert/strict';
-import { Session } from '../apps/server/src/session.ts';
-import { checkpoints } from '../apps/server/src/checkpoints.ts';
-import { Recordings } from '../apps/server/src/recordings.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld } from '../apps/server/src/runtime.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { checkpoints } from '../examples/doom/server/src/checkpoints.ts';
+import { Recordings } from '../examples/doom/server/src/recordings.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld } from '../examples/doom/server/src/runtime.ts';
 const session = new Session({ decide: async () => { throw new Error('No model is needed for a snapshot identity check'); } });
 session.setCheckpointAdapter(checkpoints);
 const store = new SessionStore('.cache/checkpoint-smoke.json');

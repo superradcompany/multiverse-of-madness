@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import { DoomMap, geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { doomInputs } from '../../apps/server/src/doom-controls.ts';
-import { navigateDoomInputs, type NavigationMemory } from '../../apps/server/src/doom-navigation.ts';
-import type { Input } from '../../packages/contracts/src/game.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import { DoomMap, geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { doomInputs } from '../../examples/doom/server/src/doom-controls.ts';
+import { navigateDoomInputs, type NavigationMemory } from '../../examples/doom/server/src/doom-navigation.ts';
+import type { Input } from '../../examples/doom/contracts/src/game.ts';
 
 // Drive the real engine into barriers with normal inputs, then compare the old
 // motor control with local recovery at identical starts. No player-state edits.

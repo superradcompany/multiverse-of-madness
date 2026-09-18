@@ -7,16 +7,16 @@ import { TypeSafeClient } from '@typesafe-ai/sdk';
 import { BudgetLedger, canonicalJson } from '@multiverse/gameplay-harness';
 import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
 import { MicrosandboxExecutor, type ExecutorRunRecord } from '../../packages/executor-microsandbox/src/executor.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../../apps/server/src/doom-learning-models.ts';
-import { DoomPreparedModel } from '../../apps/server/src/doom-prepared-model.ts';
-import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../apps/server/src/doom-evaluation-vms.ts';
-import { microsandboxEvaluationVmPorts } from '../../apps/server/src/doom-evaluation-vm-provider.ts';
-import { readDoomLearningBuild, retainDoomLearningBuild } from '../../apps/server/src/doom-learning-build.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../../apps/server/src/doom-navigation.ts';
-import { decodeDoomProposal } from '../../apps/server/src/doom-supervisor-proposal.ts';
-import { defaultDoomOutcomeWeights, scoreDoomOutcome } from '../../apps/server/src/doom-outcome.ts';
-import { Session } from '../../apps/server/src/session.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { DoomPreparedModel } from '../../examples/doom/server/src/doom-prepared-model.ts';
+import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../examples/doom/server/src/doom-evaluation-vms.ts';
+import { microsandboxEvaluationVmPorts } from '../../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { readDoomLearningBuild, retainDoomLearningBuild } from '../../examples/doom/server/src/doom-learning-build.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../../examples/doom/server/src/doom-navigation.ts';
+import { decodeDoomProposal } from '../../examples/doom/server/src/doom-supervisor-proposal.ts';
+import { defaultDoomOutcomeWeights, scoreDoomOutcome } from '../../examples/doom/server/src/doom-outcome.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
 
 // Component integration with authored or unchanged supervisor-proposed source. No improvement claim.
 const root = resolve(`artifacts/doom-prepared-model/${new Date().toISOString().replaceAll(':', '-')}`);

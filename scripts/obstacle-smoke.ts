@@ -1,10 +1,10 @@
 import './runtime-env.ts';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createWorld, type WorldRuntime } from '../apps/server/src/runtime.ts';
-import { doomInputs } from '../apps/server/src/doom-controls.ts';
-import { navigateDoomInputs, type NavigationMemory } from '../apps/server/src/doom-navigation.ts';
-import { geometryFor } from '../apps/server/src/doom-geometry.ts';
+import { createWorld, type WorldRuntime } from '../examples/doom/server/src/runtime.ts';
+import { doomInputs } from '../examples/doom/server/src/doom-controls.ts';
+import { navigateDoomInputs, type NavigationMemory } from '../examples/doom/server/src/doom-navigation.ts';
+import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
 
 const source = await createWorld(`mom-obstacle-smoke-${Date.now()}`);
 let children: WorldRuntime[] = [];

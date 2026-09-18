@@ -7,15 +7,15 @@ import { tmpdir } from 'node:os';
 import type { TypeSafeClient } from '@typesafe-ai/sdk';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
 import { ExecutableStore } from '@multiverse/gameplay-harness/node';
-import { DoomVmEvaluations } from '../apps/server/src/doom-vm-evaluations.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../apps/server/src/doom-learning-models.ts';
-import { microsandboxEvaluationVmPorts } from '../apps/server/src/doom-evaluation-vm-provider.ts';
-import { doomLearningDirectory } from '../apps/server/src/doom-learning-lineage.ts';
-import { decodeDoomLearningManifest } from '../apps/server/src/doom-learning-manifest.ts';
-import { doomSurvivalProgress } from '../apps/server/src/doom-revision-evaluation.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { Session } from '../apps/server/src/session.ts';
-import { decision } from '../apps/server/test-support/fixture-runtime.ts';
+import { DoomVmEvaluations } from '../examples/doom/server/src/doom-vm-evaluations.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../examples/doom/server/src/doom-learning-models.ts';
+import { microsandboxEvaluationVmPorts } from '../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { doomLearningDirectory } from '../examples/doom/server/src/doom-learning-lineage.ts';
+import { decodeDoomLearningManifest } from '../examples/doom/server/src/doom-learning-manifest.ts';
+import { doomSurvivalProgress } from '../examples/doom/server/src/doom-revision-evaluation.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { decision } from '../examples/doom/server/test-support/fixture-runtime.ts';
 
 // Real Doom forks with deterministic judgments. No paid model calls and no live-session mutation.
 const data = resolve(process.argv[2] ?? '.data-demo-20260918');

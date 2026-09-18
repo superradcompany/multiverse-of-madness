@@ -4,12 +4,12 @@ import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { BudgetExhausted, compareRevisions, type EvaluationContract, type EvaluationOutput, type LearningRevision } from '@multiverse/gameplay-harness';
 import { contentRevision, JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { Session } from '../../apps/server/src/session.ts';
-import { Jev, type Decision } from '../../apps/server/src/jev.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../../apps/server/src/doom-navigation.ts';
-import type { GameState, Step } from '../../packages/contracts/src/game.ts';
-import type { WorldView, SessionView } from '../../packages/contracts/src/session.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import { Jev, type Decision } from '../../examples/doom/server/src/jev.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../../examples/doom/server/src/doom-navigation.ts';
+import type { GameState, Step } from '../../examples/doom/contracts/src/game.ts';
+import type { WorldView, SessionView } from '../../examples/doom/contracts/src/session.ts';
 import { doomScenario } from './doom-scenarios.ts';
 import { EvaluationWorld } from './doom-runtime.ts';
 import { revisionExperiment } from './revision-experiment.ts';
@@ -23,7 +23,7 @@ const root = resolve(values.output ?? `artifacts/harness-evaluation/${new Date()
 await mkdir(dirname(root), { recursive: true });
 await mkdir(root, { recursive: false });
 const scenarios = ids.map(doomScenario);
-const sourceRoots = ['apps/server/src', 'packages/contracts/src', 'packages/game-bridge/src', 'harness/src', 'scripts/evaluation'];
+const sourceRoots = ['examples/doom/server/src', 'examples/doom/contracts/src', 'examples/doom/bridge/src', 'harness/src', 'scripts/evaluation'];
 const files = ['assets/wasmdoom.wasm', 'assets/freedoom1.wad', 'package.json', 'package-lock.json', 'tsconfig.json', 'harness/package.json', 'harness/package-lock.json', 'harness/tsconfig.json', 'harness/tsconfig.build.json', ...(
   await Promise.all(sourceRoots.map(async directory => (await readdir(directory, { recursive: true }))
     .filter(file => file.endsWith('.ts') && !file.endsWith('.test.ts')).map(file => join(directory, file))))

@@ -1,11 +1,11 @@
 // Frozen exploratory profiles, retained only for reproducing the calibration comparisons.
 import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
 import { z } from 'zod';
-import { groundedState, groundedInstructions, groundedCriteria, spatialInstructions, tacticalState, tacticalInstructions, feedbackState, feedbackInstructions } from '../../apps/server/src/doom-context.ts';
-import type { Experience } from '../../apps/server/src/experience.ts';
-import type { EntityObservation } from '../../packages/contracts/src/entity.ts';
-import type { GameState, Input } from '../../packages/contracts/src/game.ts';
+import { groundedState, groundedInstructions, groundedCriteria, spatialInstructions, tacticalState, tacticalInstructions, feedbackState, feedbackInstructions } from '../../examples/doom/server/src/doom-context.ts';
+import type { Experience } from '../../examples/doom/server/src/experience.ts';
+import type { EntityObservation } from '../../examples/doom/contracts/src/entity.ts';
+import type { GameState, Input } from '../../examples/doom/contracts/src/game.ts';
 
 export const actions = {
   advance: { label: 'push forward', inputs: ['forward', 'use'] },

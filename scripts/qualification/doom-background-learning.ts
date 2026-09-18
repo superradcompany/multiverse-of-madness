@@ -6,18 +6,18 @@ import { join, resolve } from 'node:path';
 import { TypeSafeClient } from '@typesafe-ai/sdk';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomLearningService } from '../../apps/server/src/doom-learning-service.ts';
-import { readDoomLearningBuild } from '../../apps/server/src/doom-learning-build.ts';
-import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../apps/server/src/doom-evaluation-vms.ts';
-import { microsandboxEvaluationVmPorts } from '../../apps/server/src/doom-evaluation-vm-provider.ts';
-import { observeDoomLearning } from '../../apps/server/src/doom-autonomous-learning.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import { SessionStore } from '../../apps/server/src/persistence.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../../apps/server/src/doom-navigation.ts';
+import { DoomLearningService } from '../../examples/doom/server/src/doom-learning-service.ts';
+import { readDoomLearningBuild } from '../../examples/doom/server/src/doom-learning-build.ts';
+import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../examples/doom/server/src/doom-evaluation-vms.ts';
+import { microsandboxEvaluationVmPorts } from '../../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { observeDoomLearning } from '../../examples/doom/server/src/doom-autonomous-learning.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import { SessionStore } from '../../examples/doom/server/src/persistence.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../../examples/doom/server/src/doom-navigation.ts';
 import { CodexCliSupervisor } from '../../packages/supervisor-codex/src/provider.ts';
-import type { DoomPolicy } from '../../apps/server/src/doom-policy.ts';
-import type { DoomProposalEvidence } from '../../apps/server/src/doom-supervisor-proposal.ts';
+import type { DoomPolicy } from '../../examples/doom/server/src/doom-policy.ts';
+import type { DoomProposalEvidence } from '../../examples/doom/server/src/doom-supervisor-proposal.ts';
 
 // Fault-inject a real idle interval, then use the production observer, Codex, Jev,
 // evaluator and activation path. No simulated observation or forced acceptance.

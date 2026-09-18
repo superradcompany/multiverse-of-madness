@@ -1,12 +1,12 @@
 // Paired real-Jev judgments over frozen engine observations. No live game changes.
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
-import { Jev } from '../../apps/server/src/jev.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { candidatePlans } from '../../apps/server/src/doom-plans.ts';
-import { decisionStatistics } from '../../apps/server/src/decision-context.ts';
-import { initialStats } from '../../apps/server/src/run-stats.ts';
-import { ExperienceMemory } from '../../apps/server/src/experience.ts';
-import type { GameState } from '../../packages/contracts/src/game.ts';
+import { Jev } from '../../examples/doom/server/src/jev.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { candidatePlans } from '../../examples/doom/server/src/doom-plans.ts';
+import { decisionStatistics } from '../../examples/doom/server/src/decision-context.ts';
+import { initialStats } from '../../examples/doom/server/src/run-stats.ts';
+import { ExperienceMemory } from '../../examples/doom/server/src/experience.ts';
+import type { GameState } from '../../examples/doom/contracts/src/game.ts';
 
 const root = 'artifacts/calibration/validated';
 const examples: Array<{ file: string; state: GameState }> = [];

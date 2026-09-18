@@ -7,11 +7,11 @@
   },
   "scripts": {
     "typecheck": "npm run build:harness && tsc --noEmit",
-    "test": "npm run build:harness && tsx --test apps/server/src/*.test.ts packages/game-bridge/src/*.test.ts packages/executor-microsandbox/src/*.test.ts packages/supervisor-claude/src/*.test.ts packages/supervisor-codex/src/*.test.ts examples/chess/*.test.ts",
-    "bridge": "tsx packages/game-bridge/src/server.ts",
+    "test": "npm run build:harness && tsx --test examples/doom/server/src/*.test.ts examples/doom/bridge/src/*.test.ts packages/executor-microsandbox/src/*.test.ts packages/supervisor-claude/src/*.test.ts packages/supervisor-codex/src/*.test.ts examples/chess/*.test.ts",
+    "bridge": "tsx examples/doom/bridge/src/server.ts",
     "smoke:engine": "tsx scripts/engine-smoke.ts",
-    "build": "npm run build:harness && tsx scripts/build-bridge.ts && vite build apps/web",
-    "start": "node --env-file=.env --import tsx apps/server/src/main.ts",
+    "build": "npm run build:harness && tsx scripts/build-bridge.ts && npm run build:web",
+    "start": "node --env-file=.env --import tsx examples/doom/server/src/main.ts",
     "setup:assets": "tsx scripts/setup-assets.ts",
     "smoke:sandbox": "tsx scripts/sandbox-smoke.ts",
     "smoke:jev": "node --env-file=.env --import tsx scripts/jev-smoke.ts",
@@ -31,10 +31,17 @@
     "qualify:executor": "npm run build:harness && node --import tsx scripts/qualification/executable-revisions.ts",
     "example:chess:web": "npm run build:harness && node --env-file-if-exists=.env --import tsx examples/chess/web-server.ts",
     "example:chess": "npm run build:harness && node --env-file-if-exists=.env --import tsx examples/chess/main.ts",
-    "qualify:doom-revisions": "npm run build:harness && node --import tsx scripts/qualification/doom-revisions.ts"
+    "qualify:doom-revisions": "npm run build:harness && node --import tsx scripts/qualification/doom-revisions.ts",
+    "build:web": "npm run build:web:doom && npm run build:web:chess",
+    "example:doom": "npm start",
+    "test:web": "tsx --test examples/doom/web/src/*.test.ts examples/shared/web/src/*.test.ts",
+    "build:web:doom": "vite build examples/doom/web",
+    "build:web:chess": "vite build examples/chess/web",
+    "demo:doom": "npm run setup && npm start",
+    "demo:chess": "npm run build:harness && npm run build:web:chess && node --env-file-if-exists=.env --import tsx examples/chess/web-server.ts"
   },
   "dependencies": {
-    "@multiverse/gameplay-harness": "file:harness",
+    "@multiverse/gameplay-harness": "*",
     "@typesafe-ai/sdk": "0.6.0",
     "chess.js": "1.4.0",
     "ffmpeg-static": "5.3.0",
@@ -57,5 +64,8 @@
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vite": "8.3.0"
-  }
+  },
+  "workspaces": [
+    "harness"
+  ]
 }

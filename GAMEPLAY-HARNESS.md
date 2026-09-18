@@ -65,10 +65,10 @@ uses 35 game ticks per second. Game time excludes model/network/snapshot latency
 | Central supervisor | **Proposed, after harness extraction:** independently configurable model/provider, review triggers, evidence window, intervention scope, cooldown and cost budget. | Detect strategic loops and missing prerequisites that the fast decision model does not resolve. Evaluate whether interventions produce sustained progress, not just different actions. |
 | Recordings and VM cleanup | **Environment:** discarded recordings default to 1,024 MiB / 24 hours / 200 worlds. Selected ancestry retained until explicit restart. **Code:** root-layer compaction at 64 layers. | Sustained operation and replay completeness. Selected footage can exceed the discarded-cache budget; GC must preserve checkpoints/ancestry still in use. |
 
-Source locations: [session loop](apps/server/src/session.ts),
-[decision envelope](apps/server/src/decision-context.ts), [Jev questions](apps/server/src/jev.ts),
-[attempt memory](apps/server/src/experience.ts), [game bridge](packages/game-bridge/src/engine.ts),
-[run statistics](apps/server/src/run-stats.ts), [recordings](apps/server/src/recordings.ts).
+Source locations: [session loop](examples/doom/server/src/session.ts),
+[decision envelope](examples/doom/server/src/decision-context.ts), [Jev questions](examples/doom/server/src/jev.ts),
+[attempt memory](examples/doom/server/src/experience.ts), [game bridge](examples/doom/bridge/src/engine.ts),
+[run statistics](examples/doom/server/src/run-stats.ts), [recordings](examples/doom/server/src/recordings.ts).
 
 ## Plan library and adapter tuning
 
@@ -90,12 +90,12 @@ finishing it triggers another observation/decision within the same trial budget.
 | Approach from another angle | Nearby wall-occluded enemy and a static route toward a possible firing angle | Navigate, then re-observe before attacking. No firing through the obstruction. |
 | Return toward a known pickup | Useful remembered resource, valid age/map, navigable progress toward it | Recheck availability on arrival; never insert a remembered pickup into live telemetry. |
 
-[`doom-plan-policy.ts`](apps/server/src/doom-plan-policy.ts) groups the new adapter
+[`doom-plan-policy.ts`](examples/doom/server/src/doom-plan-policy.ts) groups the new adapter
 knobs: menu cap 10; direct pickup/interaction radius 384; use distance 48; use
 attempt budget 35 ticks; strafe clearance 64 and duration 70 ticks; tactical search
 radius 384, step 64, expansion limit 128, at most two waypoints; low-ammo targets
 100 bullets / 25 shells / 150 cells / 25 rockets. Pickup-memory bounds live in
-[`doom-pickup-memory.ts`](apps/server/src/doom-pickup-memory.ts).
+[`doom-pickup-memory.ts`](examples/doom/server/src/doom-pickup-memory.ts).
 
 Other existing code knobs remain in `doom-plans.ts`: 7-degree aim tolerance,
 105-tick face deadline, 140-tick movement/attack deadline, 8-health damage

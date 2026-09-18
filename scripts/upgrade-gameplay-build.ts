@@ -1,10 +1,10 @@
 import { resolve, join } from 'node:path';
 import { copyFile } from 'node:fs/promises';
-import { acquireDataLease } from '../apps/server/src/data-lease.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { readDoomLearningBuild } from '../apps/server/src/doom-learning-build.ts';
-import { prepareDoomBuildUpgrade } from '../apps/server/src/doom-learning-upgrade.ts';
-import { collectDoomUpgradeWork, doomUpgradeReferences } from '../apps/server/src/doom-upgrade-work.ts';
+import { acquireDataLease } from '../examples/doom/server/src/data-lease.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { readDoomLearningBuild } from '../examples/doom/server/src/doom-learning-build.ts';
+import { prepareDoomBuildUpgrade } from '../examples/doom/server/src/doom-learning-upgrade.ts';
+import { collectDoomUpgradeWork, doomUpgradeReferences } from '../examples/doom/server/src/doom-upgrade-work.ts';
 
 const directory = process.argv[2];
 if (!directory) throw new Error('Usage: tsx scripts/upgrade-gameplay-build.ts DATA_DIRECTORY (stop its server first)');

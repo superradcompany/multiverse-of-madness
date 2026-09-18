@@ -1,4 +1,4 @@
-import type { Step } from '../../packages/contracts/src/game.ts';
+import type { Step } from '../../examples/doom/contracts/src/game.ts';
 import type { EvaluationScenario } from '@multiverse/gameplay-harness';
 
 // Existing diagnostic starts from calibration/play.ts, now runnable without

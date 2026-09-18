@@ -1,6 +1,6 @@
 import './runtime-env.ts';
 import './build-bridge.ts';
-import { createWorld } from '../apps/server/src/runtime.ts';
+import { createWorld } from '../examples/doom/server/src/runtime.ts';
 const world = await createWorld(`mom-fps-${Date.now()}`);
 try {
   const samples = [];

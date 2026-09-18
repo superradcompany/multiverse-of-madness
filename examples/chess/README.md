@@ -8,11 +8,10 @@ ancestry through the same components used by Doom.
 
 ## Browser demo
 
-Build the web entries and start the chess host from the application root:
+After `npm ci` and adding your Jev key to the root `.env`, run from the repository root:
 
 ```sh
-npx vite build apps/web
-npm run example:chess:web
+npm run demo:chess
 ```
 
 Open <http://localhost:4321>. New sessions use real Jev and require
@@ -27,9 +26,9 @@ inspected. Restarting the host reopens the saved session paused.
 (defaults: `4321`, `.data/chess-live`). `CHESS_MODEL=fixture` creates a deterministic
 workflow demo without model calls; its label explicitly identifies the test player.
 The host and CLI share the `.owner` lock and cannot write the same session together.
-Use a separate directory for a different model configuration. New learning sessions
-can be created with `CHESS_LEARNING=1 CHESS_DATA_DIR=.data/chess-learning`; they
-require the Codex CLI login as well as Jev credentials. Saved learning sessions
+Use a separate directory for a different model configuration. For background learning, first run `npm run setup:runtime`, then start a separate
+session with `CHESS_LEARNING=1 CHESS_DATA_DIR=.data/chess-learning npm run demo:chess`.
+This additionally requires an authenticated Codex CLI. Saved learning sessions
 reopen with their original supervisor binding automatically. Existing plain-Jev
 sessions remain unchanged and require a separate directory until migration is
 implemented.

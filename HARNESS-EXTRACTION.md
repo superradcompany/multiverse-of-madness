@@ -4,15 +4,15 @@ Current implementation and remaining acceptance work: [completion checklist](COM
 
 Status: in progress. Baseline: `fd777f7` in the demo repository.
 
-The requested end state is a standalone TypeScript harness, consumed through a
-Git submodule, that drives the existing Doom application and supports other games
+The requested end state is an independently usable TypeScript harness, maintained
+as a package in the same repository, that drives the existing Doom application and supports other games
 through explicit adapters. The browser is a consumer, not part of the engine.
 No claim of automatic support for arbitrary games or model-weight training is
 made: games must supply an adapter, and training backends are separate providers.
 
 ## Required delivery and evidence
 
-1. A standalone repository mounted at `harness/`, with public typed exports,
+1. An independently usable package at `harness/`, with public typed exports,
    its own build/typecheck/test workflow, documentation, and no parent imports.
 2. A headless core owning sessions, trials, budgets, cancellation, promotion,
    recovery, experience retention, persistence and replay ancestry. Core code
@@ -61,10 +61,11 @@ extraction. A new storage schema must have a tested import path or a clear refus
 
 ## Repository setup
 
-The demo currently has no remote. Until a hosting location is supplied, create a
-local sibling repository and reference it as a Git submodule. Publishing repositories
-is separate from extraction. A local URL is not a publicly cloneable dependency;
-replace it with the chosen remote before sharing the parent repository.
+By user direction on 2026-09-18, the harness, concrete Microsandbox executor,
+supervisor providers and both demos are maintained together in
+`superradcompany/multiverse-of-madness`. `harness/` is a normal tracked directory
+with its own package boundary and checks. Historical milestones below refer to
+the earlier submodule layout; a current clone needs no submodule initialization.
 
 ## Extraction evidence, 2026-09-17
 
@@ -124,7 +125,7 @@ Additional lifecycle qualification:
   failure, partial cleanup, interrupted capture/restore, state mismatch, retention
   and a collector queued behind a failed restore transaction. Typecheck and the
   production build pass. The real-VM smoke passed after lifecycle integration.
-- `apps/server/fixtures/session-fd777f7` was produced by the unchanged session and
+- `examples/doom/server/fixtures/session-fd777f7` was produced by the unchanged session and
   recording code at the pre-extraction commit. The compatibility test loads its
   version-1 session and compressed recordings, reconnects, promotes a future,
   checks replay ancestry, restores a checkpoint and persists the resulting session.
@@ -449,7 +450,7 @@ Doom learning binding and real-runtime qualification:
   running session. Journal ownership, proposal-generation/status commands, UI
   integration and broader Doom learning evaluation remain. This controlled test
   proves the real-runtime integration, not autonomous Doom improvement.
-  See `apps/server/DOOM-LEARNING.md` for the integration contract and limitations.
+  See `examples/doom/server/DOOM-LEARNING.md` for the integration contract and limitations.
 
 Doom server owner and artifact-aware Jev integration:
 

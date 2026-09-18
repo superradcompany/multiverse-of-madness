@@ -6,11 +6,11 @@ import { join, resolve } from 'node:path';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomEvaluationVms, decodeDoomEvaluationVms, doomIncidentCheckpoint } from '../apps/server/src/doom-evaluation-vms.ts';
-import { microsandboxEvaluationVmPorts } from '../apps/server/src/doom-evaluation-vm-provider.ts';
-import { doomLearningDirectory } from '../apps/server/src/doom-learning-lineage.ts';
-import { decodeDoomLearningManifest } from '../apps/server/src/doom-learning-manifest.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
+import { DoomEvaluationVms, decodeDoomEvaluationVms, doomIncidentCheckpoint } from '../examples/doom/server/src/doom-evaluation-vms.ts';
+import { microsandboxEvaluationVmPorts } from '../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { doomLearningDirectory } from '../examples/doom/server/src/doom-learning-lineage.ts';
+import { decodeDoomLearningManifest } from '../examples/doom/server/src/doom-learning-manifest.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
 
 const input = process.argv[2];
 if (!input) throw new Error('Pass a session data directory containing a retained execution checkpoint');

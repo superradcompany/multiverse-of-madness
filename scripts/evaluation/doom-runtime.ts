@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import type { Step } from '../../packages/contracts/src/game.ts';
-import type { WorldRuntime } from '../../apps/server/src/runtime.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import type { Step } from '../../examples/doom/contracts/src/game.ts';
+import type { WorldRuntime } from '../../examples/doom/server/src/runtime.ts';
 
 /** Real Doom with deterministic replay cloning, not a VM snapshot/performance test. */
 export class EvaluationWorld implements WorldRuntime {

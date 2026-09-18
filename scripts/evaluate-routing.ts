@@ -2,9 +2,9 @@ import './runtime-env.ts';
 import './build-bridge.ts';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { Session, outcomeScore } from '../apps/server/src/session.ts';
-import { Jev, type DecisionMaker } from '../apps/server/src/jev.ts';
-import { createWorld, type WorldRuntime } from '../apps/server/src/runtime.ts';
+import { Session, outcomeScore } from '../examples/doom/server/src/session.ts';
+import { Jev, type DecisionMaker } from '../examples/doom/server/src/jev.ts';
+import { createWorld, type WorldRuntime } from '../examples/doom/server/src/runtime.ts';
 
 // Matched starts and equal game-time budgets. Review holds and animation pacing
 // are disabled for every policy. This measures a policy, not the staged UI.

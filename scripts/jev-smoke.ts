@@ -1,7 +1,7 @@
-import { DoomEngine } from '../packages/game-bridge/src/engine.ts';
+import { DoomEngine } from '../examples/doom/bridge/src/engine.ts';
 import assert from 'node:assert/strict';
-import { ExperienceMemory } from '../apps/server/src/experience.ts';
-import { Jev } from '../apps/server/src/jev.ts';
+import { ExperienceMemory } from '../examples/doom/server/src/experience.ts';
+import { Jev } from '../examples/doom/server/src/jev.ts';
 const engine = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad');
 const before = engine.state();
 const after = engine.step({ ticks: 35, inputs: [] });

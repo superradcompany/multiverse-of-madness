@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import type { Step } from '../../packages/contracts/src/game.ts';
-import { Jev } from '../../apps/server/src/jev.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import type { WorldRuntime } from '../../apps/server/src/runtime.ts';
-import { navigateDoomInputs } from '../../apps/server/src/doom-navigation.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import type { Step } from '../../examples/doom/contracts/src/game.ts';
+import { Jev } from '../../examples/doom/server/src/jev.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import type { WorldRuntime } from '../../examples/doom/server/src/runtime.ts';
+import { navigateDoomInputs } from '../../examples/doom/server/src/doom-navigation.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
 
 // Real Doom execution with deterministic input replay for experiment clones.
 // This evaluates the policy only. It is NOT a VM-fork/performance benchmark.

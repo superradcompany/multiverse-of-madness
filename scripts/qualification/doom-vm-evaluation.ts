@@ -5,12 +5,12 @@ import { copyFile, cp, mkdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { EvaluationContract } from '@multiverse/gameplay-harness';
 import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomVmEvaluations, type DoomVmScenario } from '../../apps/server/src/doom-vm-evaluations.ts';
-import { microsandboxEvaluationVmPorts } from '../../apps/server/src/doom-evaluation-vm-provider.ts';
-import { DoomLearningModels, doomLearningArtifact } from '../../apps/server/src/doom-learning-models.ts';
-import { doomSurvivalProgress } from '../../apps/server/src/doom-revision-evaluation.ts';
-import { Session } from '../../apps/server/src/session.ts';
-import type { VmResources } from '../../packages/contracts/src/vm.ts';
+import { DoomVmEvaluations, type DoomVmScenario } from '../../examples/doom/server/src/doom-vm-evaluations.ts';
+import { microsandboxEvaluationVmPorts } from '../../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import { DoomLearningModels, doomLearningArtifact } from '../../examples/doom/server/src/doom-learning-models.ts';
+import { doomSurvivalProgress } from '../../examples/doom/server/src/doom-revision-evaluation.ts';
+import { Session } from '../../examples/doom/server/src/session.ts';
+import type { VmResources } from '../../examples/doom/contracts/src/vm.ts';
 
 if (!process.argv[2]) throw new Error('Pass the successful physical-ownership qualification directory');
 const previous = resolve(process.argv[2]);

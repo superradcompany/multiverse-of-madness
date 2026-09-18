@@ -7,9 +7,9 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { BudgetLedger } from '@multiverse/gameplay-harness';
 import { JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../apps/server/src/doom-evaluation-vms.ts';
-import { microsandboxEvaluationVmPorts } from '../../apps/server/src/doom-evaluation-vm-provider.ts';
-import type { VmResources } from '../../packages/contracts/src/vm.ts';
+import { DoomEvaluationVms, decodeDoomEvaluationVms } from '../../examples/doom/server/src/doom-evaluation-vms.ts';
+import { microsandboxEvaluationVmPorts } from '../../examples/doom/server/src/doom-evaluation-vm-provider.ts';
+import type { VmResources } from '../../examples/doom/contracts/src/vm.ts';
 
 const phase = process.argv[2];
 if (!phase) {
@@ -18,7 +18,7 @@ if (!phase) {
   const { Image } = await import('microsandbox');
   const image = await Image.get('docker.io/library/node:24-alpine'); assert.ok(image.manifestDigest);
   const files = ['assets/wasmdoom.wasm', 'assets/freedoom1.wad', 'dist/bridge.mjs', 'package-lock.json', 'scripts/qualification/doom-evaluation-vms.ts',
-    ...(await Promise.all(['apps/server/src', 'packages/contracts/src', 'packages/game-bridge/src', 'harness/src'].map(async directory =>
+    ...(await Promise.all(['examples/doom/server/src', 'examples/doom/contracts/src', 'examples/doom/bridge/src', 'harness/src'].map(async directory =>
       (await readdir(directory, { recursive: true })).filter(file => file.endsWith('.ts') && !file.endsWith('.test.ts')).map(file => join(directory, file))))).flat()].sort();
   const hashes = Object.fromEntries(await Promise.all(files.map(async file => {
     const bytes = await readFile(file);

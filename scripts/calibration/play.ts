@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { DoomEngine } from '../../packages/game-bridge/src/engine.ts';
-import { actions, Jev, type Decision } from '../../apps/server/src/jev.ts';
+import { DoomEngine } from '../../examples/doom/bridge/src/engine.ts';
+import { actions, Jev, type Decision } from '../../examples/doom/server/src/jev.ts';
 import { LabJev, type LabProfile } from './lab-jev.ts';
-import { navigateDoomInputs, type NavigationMemory } from '../../apps/server/src/doom-navigation.ts';
-import { doomInputs } from '../../apps/server/src/doom-controls.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import type { GameState, Step } from '../../packages/contracts/src/game.ts';
+import { navigateDoomInputs, type NavigationMemory } from '../../examples/doom/server/src/doom-navigation.ts';
+import { doomInputs } from '../../examples/doom/server/src/doom-controls.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import type { GameState, Step } from '../../examples/doom/contracts/src/game.ts';
 
 const profile = process.argv[2] as LabProfile | 'game-aware';
 assert.ok(['baseline', 'grounded', 'spatial', 'tactical', 'assisted', 'feedback', 'calibrated', 'calibrated-v2', 'calibrated-v3', 'calibrated-v4', 'game-aware'].includes(profile));

@@ -1,10 +1,10 @@
 import './runtime-env.ts';
 import './build-bridge.ts';
 import assert from 'node:assert/strict';
-import { Session } from '../apps/server/src/session.ts';
-import { SessionStore } from '../apps/server/src/persistence.ts';
-import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld } from '../apps/server/src/runtime.ts';
-import { actions, type Decision } from '../apps/server/src/jev.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { SessionStore } from '../examples/doom/server/src/persistence.ts';
+import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld } from '../examples/doom/server/src/runtime.ts';
+import { actions, type Decision } from '../examples/doom/server/src/jev.ts';
 
 // Failure-injection qualification with real detached VMs and a deterministic
 // decision fixture. This is not an inference/quality evaluation.

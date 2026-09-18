@@ -3,11 +3,11 @@ import { writeFileSync } from 'node:fs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { TypeSafeClient } from '@typesafe-ai/sdk';
-import { Jev } from '../../apps/server/src/jev.ts';
-import { geometryFor } from '../../apps/server/src/doom-geometry.ts';
-import { startPlan, planInputs } from '../../apps/server/src/doom-plans.ts';
-import { previousPlanFeedback } from '../../apps/server/src/plan-feedback.ts';
-import { prepareDoomContext } from '../../apps/server/src/doom-preparation.ts';
+import { Jev } from '../../examples/doom/server/src/jev.ts';
+import { geometryFor } from '../../examples/doom/server/src/doom-geometry.ts';
+import { startPlan, planInputs } from '../../examples/doom/server/src/doom-plans.ts';
+import { previousPlanFeedback } from '../../examples/doom/server/src/plan-feedback.ts';
+import { prepareDoomContext } from '../../examples/doom/server/src/doom-preparation.ts';
 
 const source = process.argv[2];
 if (!source) throw new Error('Pass an observed preparation record from an earlier qualification');

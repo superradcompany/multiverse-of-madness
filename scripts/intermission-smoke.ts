@@ -5,8 +5,8 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Sandbox, SandboxNotFoundError } from 'microsandbox';
-import { reconnectWorld } from '../apps/server/src/runtime.ts';
-import { Session } from '../apps/server/src/session.ts';
+import { reconnectWorld } from '../examples/doom/server/src/runtime.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
 
 // Run only while the source's host is stopped/paused. Fork the exact real
 // intermission without advancing or destroying the retained source world.

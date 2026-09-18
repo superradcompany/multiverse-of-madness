@@ -1,8 +1,8 @@
 /** Read-only delivery measurements against an already running demo; creates no VMs or model calls. */
 import { writeFile } from 'node:fs/promises';
 import WebSocket from 'ws';
-import type { SessionView } from '../packages/contracts/src/session.ts';
-import { applySessionUpdate, type SessionPatch, type SessionUpdate } from '../packages/contracts/src/session-stream.ts';
+import type { SessionView } from '../examples/doom/contracts/src/session.ts';
+import { applySessionUpdate, type SessionPatch, type SessionUpdate } from '../examples/doom/contracts/src/session-stream.ts';
 
 const origin = new URL(process.argv[2] ?? 'http://localhost:4320');
 const seconds = Number(process.argv[3] ?? 60);

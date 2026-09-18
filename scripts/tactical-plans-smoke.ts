@@ -1,11 +1,11 @@
 import './runtime-env.ts';
 import assert from 'node:assert/strict';
-import { createWorld, type WorldRuntime } from '../apps/server/src/runtime.ts';
-import { Session } from '../apps/server/src/session.ts';
-import { actions, type DecisionMaker, type Decision } from '../apps/server/src/jev.ts';
-import { candidatePlans } from '../apps/server/src/doom-plans.ts';
-import { geometryFor } from '../apps/server/src/doom-geometry.ts';
-import { navigateDoomInputs } from '../apps/server/src/doom-navigation.ts';
+import { createWorld, type WorldRuntime } from '../examples/doom/server/src/runtime.ts';
+import { Session } from '../examples/doom/server/src/session.ts';
+import { actions, type DecisionMaker, type Decision } from '../examples/doom/server/src/jev.ts';
+import { candidatePlans } from '../examples/doom/server/src/doom-plans.ts';
+import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
+import { navigateDoomInputs } from '../examples/doom/server/src/doom-navigation.ts';
 
 // Real detached VMs and live game inputs; deterministic candidate selection.
 // This checks execution/fork isolation, not Jev quality or a higher win rate.

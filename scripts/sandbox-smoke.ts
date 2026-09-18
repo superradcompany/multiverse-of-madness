@@ -2,7 +2,7 @@ import './runtime-env.ts';
 import './build-bridge.ts';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { createWorld, type WorldRuntime } from '../apps/server/src/runtime.ts';
+import { createWorld, type WorldRuntime } from '../examples/doom/server/src/runtime.ts';
 const worlds: WorldRuntime[] = [];
 await mkdir('artifacts', { recursive: true });
 try {

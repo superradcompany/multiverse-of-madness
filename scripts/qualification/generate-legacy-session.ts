@@ -3,20 +3,20 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { Runtime, decision } from '../../apps/server/test-support/fixture-runtime.ts';
-import type { Session } from '../../apps/server/src/session.ts';
-import type { Recordings } from '../../apps/server/src/recordings.ts';
+import { Runtime, decision } from '../../examples/doom/server/test-support/fixture-runtime.ts';
+import type { Session } from '../../examples/doom/server/src/session.ts';
+import type { Recordings } from '../../examples/doom/server/src/recordings.ts';
 
 const commit = 'fd777f7';
 const source = resolve('.cache/legacy-session-producer');
-const output = resolve('apps/server/fixtures/session-fd777f7');
+const output = resolve('examples/doom/server/fixtures/session-fd777f7');
 await mkdir(source, { recursive: true });
-const archive = execFileSync('git', ['archive', commit, 'apps/server/src', 'packages/contracts/src']);
+const archive = execFileSync('git', ['archive', commit, 'examples/doom/server/src', 'examples/doom/contracts/src']);
 execFileSync('tar', ['-x', '-C', source], { input: archive });
 // The generator uses only methods present in the pinned producer. Current types
 // document that common surface; the executed implementation comes from git.
-const { Session: LegacySession } = await import(pathToFileURL(`${source}/apps/server/src/session.ts`).href) as { Session: typeof Session };
-const { Recordings: LegacyRecordings } = await import(pathToFileURL(`${source}/apps/server/src/recordings.ts`).href) as { Recordings: typeof Recordings };
+const { Session: LegacySession } = await import(pathToFileURL(`${source}/examples/doom/server/src/session.ts`).href) as { Session: typeof Session };
+const { Recordings: LegacyRecordings } = await import(pathToFileURL(`${source}/examples/doom/server/src/recordings.ts`).href) as { Recordings: typeof Recordings };
 await rm(`${output}/recordings`, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
 const recordings = new LegacyRecordings(`${output}/recordings`);
