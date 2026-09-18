@@ -9,7 +9,8 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: '../../../dist/web',
-    emptyOutDir: true,
+    // Both viewers share this directory; starting Doom must preserve a running chess viewer.
+    emptyOutDir: false,
     rollupOptions: { input: fileURLToPath(new URL('index.html', import.meta.url)) },
   },
 });
