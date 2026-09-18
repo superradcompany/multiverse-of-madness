@@ -5,7 +5,9 @@ export const doomPlanPolicy = {
   maxCandidates: 10,
   pickupRadius: 384,
   interactionRadius: 384,
-  useDistance: 48,
+  // wasmdoom dd321b50 src/p_local.h: USERANGE is 64 world units.
+  // A nearer host cutoff rejects valid attempts after ordinary movement inertia.
+  useDistance: 64,
   interactionTicks: 35,
   strafeClearance: 64,
   strafeTicks: 70,

@@ -15,7 +15,7 @@ export function SkillsPanel({ session, command }: { session: SessionView; comman
     finally { setBusy(false); }
   };
   return <>
-    <button type="button" className="skills-trigger" onClick={() => dialog.current?.showModal()}><BookOpen size={15} /> AI skills <span>{enabled} enabled</span></button>
+    <button type="button" className="icon skills-trigger" aria-label={`AI skills · ${enabled} enabled`} title={`AI skills · ${enabled} enabled`} aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}><BookOpen />{enabled > 0 && <span className="skills-count" aria-hidden="true">{enabled}</span>}</button>
     <dialog ref={dialog} className="skills-dialog" aria-labelledby="skills-heading">
       <div className="skills-heading"><h2 id="skills-heading">AI skills</h2><button type="button" className="icon" aria-label="Close AI skills" onClick={() => dialog.current?.close()}><X size={18} /></button></div>
       <p>Reusable instructions for every Jev decision, across all worlds. Your current guide takes priority.</p>

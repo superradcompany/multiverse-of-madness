@@ -1,0 +1,22 @@
+.game-session-trigger { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; flex-shrink: 0; padding: 0; border: 1px solid #42354f; border-radius: 9px; background: #19121f; color: #c7b2dc; cursor: pointer; }
+.game-session-trigger svg { width: 18px; height: 18px; }
+.game-session-dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); padding: 24px; border: 1px solid #665079; border-radius: 18px; background: #100c16; color: #f0e8f9; overflow: auto; font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 20px 70px #0008; }
+.game-session-dialog::backdrop { background: #050308b8; backdrop-filter: blur(4px); }
+.game-session-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.game-session-heading h2 { margin: 0; font-size: 23px; font-weight: 650; }
+.game-session-heading p { margin: 4px 0 0; color: #b9a8c9; }
+.game-session-heading button { width: 40px; height: 40px; min-height: 40px; display: grid; place-items: center; padding: 0; flex-shrink: 0; border: 1px solid #4b3a58; border-radius: 10px; background: #21172c; color: inherit; cursor: pointer; }
+.game-session-heading button svg { width: 20px; height: 20px; }
+.game-session-group { margin-top: 24px; padding: 0; background: none; border: none; }
+.game-session-group h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #bc9dd9; }
+.game-session-group a { display: flex; align-items: center; gap: 10px; padding: 15px; margin-top: 8px; border: 1px solid #40324c; border-radius: 11px; color: inherit; background: #1a1223; text-decoration: none; }
+.game-session-group a:hover, .game-session-group a[aria-current] { background: #2c1b3b; border-color: #9870bb; }
+.game-session-group a>div { flex: 1; min-width: 0; }
+.game-session-group strong { display: block; font-weight: 600; }
+.game-session-group span { display: block; font-size: 12px; color: #beaecb; margin-top: 3px; overflow-wrap: anywhere; }
+.game-session-group small { font-size: 11px; color: #c7a5e6; }
+.game-session-group svg { width: 17px; height: 17px; flex-shrink: 0; }
+.game-session-note { margin: 20px 0 0; font-size: 12px; color: #b4a3c4; line-height: 1.6; }
+.game-session-dialog :focus-visible { outline: 2px solid #c395eb; outline-offset: 3px; }
+.title-heading { display: flex; align-items: center; gap: 12px; }
+@media(max-width: 480px) { .game-session-dialog { padding: 18px; }.game-session-group a { padding: 12px; }.game-session-group small { display: none; }.title-heading { gap: 6px; }.title-heading h1 { font-size: 18px; } }

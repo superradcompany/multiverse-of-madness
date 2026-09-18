@@ -593,13 +593,13 @@ test('motor recovery memory is persisted and forks copy it without sharing mutat
   assert.equal(restored.checkpoint().worlds.find(w => w.view.id === children[0]!.view.id)!.navigation!.stalled, 17);
 });
 
-test('conditional plans span action intervals and record step progress through the comparison horizon', async () => {
+test('conditional plans reassess at the configured interval through the comparison horizon', async () => {
   let calls = 0;
   const { candidatePlans } = await import('./doom-plans.ts');
   const { DoomMap } = await import('./doom-geometry.ts');
   const plans = candidatePlans(initial, new DoomMap([])).slice(0, 2).map(p => ({ ...p, probability: .5 }));
   const s = new Session({ decide: async (_s, _o, _h, _sig, _e, _t, context) => {
-    calls++; assert.equal(context?.planTicks, 21);
+    calls++; assert.ok(context?.planTicks && context.planTicks <= 21);
     return { ...decision, plans: { selected: plans[0]!.id, candidates: plans } };
   } }, { ...options, horizon: 21 });
   s.setDecisionInterval(7);
@@ -608,22 +608,21 @@ test('conditional plans span action intervals and record step progress through t
   s.setRecorder(async w => { if (w.plan) recorded.push({ status: w.plan.status, step: w.plan.step, tick: w.state.tick }); });
   await s.initialize(main); s.step(); await s.idle();
   assert.equal(s.snapshot().error, undefined);
-  assert.equal(calls, 1, 'one Jev judgment launches two plans, no fixed-interval replanning');
+  assert.equal(calls, 5, 'opening judgment plus two reassessments per future');
   assert.equal((await main.state()).tick, 35);
   const children = s.snapshot().worlds.filter(w => w.role === 'experiment');
   assert.equal(children.length, 2);
   assert.ok(children.every(w => w.state.tick === 56 && w.plan?.status === 'horizon'));
-  assert.ok(recorded.some(r => r.step === 1));
   assert.ok(recorded.some(r => r.tick === 56 && r.status === 'horizon'));
   assert.equal(s.snapshot().decision?.kind, 'plan');
 });
 
-test('paused direct plans survive reconnect and continue without another model call', async () => {
+test('paused direct plans survive reconnect and continue without another blocking model call', async () => {
   const { candidatePlans } = await import('./doom-plans.ts');
   const { DoomMap } = await import('./doom-geometry.ts');
   const plan = { ...candidatePlans(initial, new DoomMap([]))[0]!, probability: 1 };
-  let calls = 0;
-  const decider = { decide: async () => { calls++; return { ...decision, confidence: 1, plans: { selected: plan.id, candidates: [plan] } }; } };
+  let calls = 0, ahead = 0;
+  const decider = { decide: async (_state: GameState, _goal: string, _history: GameState[], _signal: AbortSignal, _experience: unknown, _ticks: number | undefined, context?: import('./jev.ts').DecisionContext) => { if (context?.planningAhead) ahead++; else calls++; return { ...decision, confidence: 1, plans: { selected: plan.id, candidates: [plan] } }; } };
   const main = new FakeWorld('direct-plan');
   const s = new Session(decider, { ...options, horizon: 70 });
   await s.initialize(main);
@@ -638,7 +637,7 @@ test('paused direct plans survive reconnect and continue without another model c
   let finished = false;
   resumed.on('change', view => { if (!finished && view.worlds[0]?.state.tick >= 105) { finished = true; void resumed.pause(); } });
   resumed.resume(); await resumed.idle();
-  assert.equal(calls, 1);
+  assert.equal(calls, 1); assert.equal(ahead, 1, 'the next judgment is speculative and discarded on pause');
   assert.equal((await main.state()).tick, 105);
   assert.equal(resumed.snapshot().worlds[0]!.plan?.status, 'horizon');
   await resumed.takeover(main.id);
@@ -841,4 +840,176 @@ test('reconnect and rollback retire saved key strategy without losing gameplay o
   assert.equal(restored.snapshot().objective,'Explore freely.');
   const main=restored.checkpoint().worlds.find(w=>w.view.id===restored.snapshot().mainId)!;
   assert.deepEqual(main.view.state,rootRecord.view.state);assert.equal(main.plan,undefined);assert.ok(!('progression' in main));
+});
+
+test('future budget is validated, bounds the ranked candidates and survives restore and restart', async () => {
+  const source = new FakeWorld('future-budget-root');
+  const s = new Session({ decide: async () => decision }, options);
+  await s.initialize(source);
+  for (const invalid of [0, 1, 11, 2.5, NaN]) assert.throws(() => s.setMaxFutures(invalid), /Maximum futures/);
+  s.setMaxFutures(6);
+  s.step(); await s.idle();
+  assert.equal(s.snapshot().worlds.filter(w => w.role === 'experiment').length, 6);
+  assert.equal(s.snapshot().decision?.preferences?.filter(p => p.tested).length, 6);
+  const saved = s.checkpoint();
+  const restored = new Session({ decide: async () => decision }, options);
+  await restored.restore(saved, async id => new FakeWorld(id, saved.worlds.find(w => w.view.id === id)!.view.state));
+  assert.equal(restored.snapshot().maxFutures, 6);
+  await restored.restart(async () => new FakeWorld('fresh-budget-root'), async () => {});
+  assert.equal(restored.snapshot().maxFutures, 6);
+});
+
+test('changing the future budget during a decision affects only the following batch', async () => {
+  let finish!: (value: Decision) => void;
+  const s = new Session({ decide: () => new Promise(resolve => { finish = resolve; }) }, options);
+  await s.initialize(new FakeWorld('root'));
+  s.setMaxFutures(3); s.step();
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  s.setMaxFutures(6); finish(decision); await s.idle();
+  assert.equal(s.snapshot().worlds.filter(w => w.role === 'experiment').length, 3);
+  assert.equal(s.snapshot().maxFutures, 6);
+});
+
+test('VM overrides require pause and hold the execution gate until modification ends', async () => {
+  const { defaultVmSettings } = await import('../../../packages/contracts/src/vm.ts');
+  let finish!: () => void;
+  const root = new FakeWorld('vm-root') as FakeWorld & Required<Pick<WorldRuntime, 'modifyResources'>>;
+  root.modifyResources = async (_resources, dryRun) => { assert.equal(dryRun, true); await new Promise<void>(resolve => { finish = resolve; }); return { sandbox: 'vm-root', status: 'running', applied: false, policy: 'no_restart', changes: [], conflicts: [], warnings: [], resizeStatus: [] }; };
+  const s = new Session({ decide: async () => decision }, options); await s.initialize(root);
+  const pending = s.modifyVm(root.id, defaultVmSettings.defaults, true);
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(s.modifyVm(root.id, defaultVmSettings.defaults, false), /Pause/);
+  finish(); assert.equal((await pending).applied, false);
+});
+
+test('VM budget rejects a batch before any sandbox is forked', async () => {
+  const { VmSettingsStore } = await import('./vm-settings.ts');
+  const { defaultVmSettings } = await import('../../../packages/contracts/src/vm.ts');
+  const root = new FakeWorld('budget-root') as FakeWorld & Required<Pick<WorldRuntime, 'resources'>>;
+  root.resources = async () => defaultVmSettings.defaults;
+  let forked = false; root.branch = async () => { forked = true; return []; };
+  const s = new Session({ decide: async () => decision }, options); await s.initialize(root);
+  s.setVmSettings({ get settings() { return { ...defaultVmSettings, budget: { cpus: 2, memory: 0 } }; } } as import('./vm-settings.ts').VmSettingsStore);
+  s.step(); await s.idle();
+  assert.equal(forked, false); assert.match(s.snapshot().error!, /budget exceeded/);
+  assert.equal(s.snapshot().worlds.length, 1);
+});
+
+
+test('all dead futures without recovery preserve the live source, pause normally, and allow a different retry', async () => {
+  class FatalFuture extends FakeWorld {
+    override async branch(ids: string[]) { return ids.map(id => new class extends FakeWorld {
+      override async step(step: Step) { return { ...await super.step(step), health: 0, alive: false }; }
+    }(id, structuredClone(initial))); }
+  }
+  const main = new FatalFuture('root'), s = new Session({ decide: async () => decision }, options);
+  const persisted: ReturnType<Session['checkpoint']>[] = [];
+  s.setPersistence(async saved => { persisted.push(structuredClone(saved)); });
+  await s.initialize(main); s.resume(); await s.idle();
+  const view = s.snapshot(), opening = view.worlds.filter(w => w.role === 'archived').map(w => w.label);
+  assert.equal(view.error, undefined); assert.equal(view.stage, 'ready'); assert.equal(view.running, false);
+  assert.equal(view.mainId, main.id); assert.equal(main.destroyed, false); assert.deepEqual(await main.state(), initial);
+  assert.equal(view.worlds.filter(w => w.role === 'archived' && !w.state.alive).length, 2);
+  assert.equal(view.stats!.attempts.deaths, 2); assert.equal(view.stats!.attempts.rejectedBatches, 1);
+  assert.match(view.recovery!.message!, /All futures died/); assert.equal(view.comparison, undefined);
+  const saved = persisted.at(-1)!; assert.equal(saved.experiments.length, 0); assert.equal(saved.view.running, false);
+  assert.ok(saved.experience!.records.some(record => record.result.died));
+  s.step(); await s.idle();
+  assert.notDeepEqual(s.snapshot().worlds.filter(w => w.role === 'experiment').map(w => w.label), opening);
+  await s.close();
+});
+
+
+test('a zero-tick plan failure reaches the next decision after restart without fabricating experience', async () => {
+  const badPlan = { id: 'missing', label: 'collect missing supply', probability: 1,
+    steps: [{ kind: 'move' as const, label: 'reach supply', target: { kind: 'pickup' as const, engineType: 54, x: 100, y: 0, z: 0 }, maxTicks: 14 }] };
+  const { startPlan, planInputs } = await import('./doom-plans.ts');
+  const first = new Session({ decide: async () => decision }, options);
+  first.setPlanningMode('plans'); const runtime = new FakeWorld('feedback'); await first.initialize(runtime);
+  const saved = first.checkpoint();
+  const run = startPlan(badPlan, saved.worlds[0]!.view.state, 14);
+  planInputs(run, saved.worlds[0]!.view.state, []);
+  saved.worlds[0]!.plan = run;
+  assert.equal(first.snapshot().experience?.stored, 0);
+  assert.equal(saved.worlds[0]!.plan!.reason, 'target lost or ambiguous');
+  let seen = false;
+  const restored = new Session({ decide: async (_state, _objective, _history, _signal, _experience, _ticks, context) => {
+    seen = true;
+    assert.equal(context?.previousPlan?.ticksSinceStarted, 0);
+    assert.equal(context?.previousPlan?.reason, 'target lost or ambiguous');
+    assert.deepEqual(context?.previousPlan?.target, badPlan.steps[0]!.target);
+    return { ...decision, confidence: 1 };
+  } }, options);
+  await restored.restore(saved, async () => runtime);
+  restored.step(); await restored.idle();
+  assert.ok(seen); assert.equal(restored.snapshot().error, undefined);
+  assert.ok(restored.snapshot().worlds.some(world => world.state.tick > initial.tick));
+  await restored.close();
+});
+
+
+test('each future receives its own immediate failed plan before making progress', async () => {
+  const plans = [100, 200].map((x, i) => ({ id: `missing_${i}`, label: `supply ${i}`, probability: .5,
+    steps: [{ kind: 'move' as const, label: 'reach supply', target: { kind: 'pickup' as const, engineType: 54, x, y: 0, z: 0 }, maxTicks: 14 }] }));
+  const seen: number[] = [];
+  const session = new Session({ decide: async (_state, _objective, _history, _signal, _experience, _ticks, context) => {
+    if (context?.previousPlan) {
+      assert.equal(context.previousPlan.ticksSinceStarted, 0);
+      assert.equal(context.previousPlan.reason, 'target lost or ambiguous');
+      seen.push(context.previousPlan.target!.x);
+      return { ...decision, confidence: 1 };
+    }
+    return { ...decision, plans: { selected: plans[0]!.id, candidates: plans } };
+  } }, options);
+  session.setPlanningMode('plans'); await session.initialize(new FakeWorld('local-feedback'));
+  session.step(); await session.idle();
+  assert.equal(session.snapshot().error, undefined);
+  assert.deepEqual(seen.sort((a,b) => a-b), [100, 200]);
+  assert.equal(session.snapshot().stats!.attempts.planFailures, 2, 'one failure per terminal plan transition, including zero-tick stops');
+  const saved = session.checkpoint();
+  assert.equal(saved.attempts!.planFailures, 2);
+  assert.deepEqual(saved.recentPlanFailures!.map(item => item.feedback.target!.x).sort((a, b) => a - b), [100, 200]);
+  assert.ok(session.snapshot().worlds.filter(world => world.role === 'experiment').every(world => world.state.tick === initial.tick + options.horizon));
+  await session.close();
+});
+
+test('matching the trial duration works in both modes and survives restore', async () => {
+  for (const mode of ['plans', 'actions'] as const) {
+    let calls = 0;
+    const plan = { id: 'long', label: 'follow route', probability: .5, steps: [
+      { kind: 'face' as const, label: 'turn', target: { kind: 'point' as const, x: 0, y: 1000, z: 0 }, maxTicks: 2100 },
+    ] };
+    const decider: DecisionMaker = { decide: async () => { calls++; return { ...decision,
+      ...(mode === 'plans' ? { plans: { selected: plan.id, candidates: [plan, { ...plan, id: 'other' }] } } : {}) }; } };
+    const s = new Session(decider, options); s.setPlanningMode(mode); s.setDecisionInterval(7);
+    s.setDecisionIntervalMode('trial'); s.setTrialDuration(70);
+    const runtime = new FakeWorld(`linked-${mode}`); await s.initialize(runtime);
+    const restored = new Session(decider, options);
+    await restored.restore(s.checkpoint(), async () => runtime);
+    assert.equal(restored.snapshot().decisionIntervalMode, 'trial');
+    restored.step(); await restored.idle();
+    assert.equal(restored.snapshot().error, undefined);
+    assert.equal(calls, 1, 'one opening judgment when a long plan/action spans the full trial');
+    assert.ok(restored.snapshot().worlds.filter(w => w.role === 'experiment').every(w => w.state.tick === 105));
+    assert.equal(restored.learningPolicy().decisionIntervalMode, 'trial');
+    restored.setTrialDuration(350);
+    assert.equal(restored.snapshot().decisionIntervalMode, 'trial', 'changing trial duration retains the link');
+    restored.setDecisionInterval(350);
+    assert.equal(restored.snapshot().decisionIntervalMode, 'fixed', 'explicit duration unlinks');
+    assert.throws(() => restored.setDecisionInterval(2101));
+  }
+});
+
+test('direct conditional plans reassess at fixed deadlines without counting them as failures', async () => {
+  let calls = 0;
+  const plan = { id: 'long', label: 'turn', probability: 1, steps: [
+    { kind: 'face' as const, label: 'turn', target: { kind: 'point' as const, x: 0, y: 1000, z: 0 }, maxTicks: 2100 },
+  ] };
+  const s = new Session({ decide: async () => { calls++; return { ...decision, confidence: 1,
+    plans: { selected: plan.id, candidates: [plan] } }; } }, { ...options, horizon: 70 });
+  s.setDecisionInterval(7); await s.initialize(new FakeWorld('direct-cadence'));
+  s.setRecorder(async world => { if (world.state.tick >= 56) void s.pause(); });
+  s.resume(); await s.idle();
+  assert.equal(s.snapshot().error, undefined); assert.equal(calls, 4, 'three decisions used and one prefetched then discarded on pause');
+  assert.equal(s.snapshot().stats!.attempts.planFailures, 0);
 });

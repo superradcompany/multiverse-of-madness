@@ -21,6 +21,7 @@
   "include": [
     "apps",
     "packages",
-    "scripts"
+    "scripts",
+    "examples"
   ]
 }

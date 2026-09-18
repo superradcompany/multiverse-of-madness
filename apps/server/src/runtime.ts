@@ -1,23 +1,28 @@
+import type { WorldRuntime as HarnessWorldRuntime } from '@multiverse/gameplay-harness';
 import { upgradeBridge } from './bridge-upgrade.ts';
 import { maintainRootDisk } from './disk-maintenance.ts';
 import { resolve } from 'node:path';
 import type { GameState, Step } from '../../../packages/contracts/src/game.ts';
 import { SandboxGame } from './sandbox-game.ts';
 import type { Sandbox } from 'microsandbox';
+import { defaultVmSettings, vmResourcesSchema, vmResourceStateSchema, type VmResourceState, type VmResources, type VmPlan } from '../../../packages/contracts/src/vm.ts';
+import { resourcesFromConfig } from './vm-settings.ts';
 
-export interface WorldRuntime {
-  id: string;
-  identity: string;
-  state(): Promise<GameState>;
-  step(step: Step): Promise<GameState>;
-  frame(): Promise<Buffer>;
+export interface WorldRuntime extends HarnessWorldRuntime<GameState, Step, Buffer> {
   branch(ids: string[]): Promise<WorldRuntime[]>;
-  destroy(): Promise<void>;
-  captureCheckpoint?(reference: string): Promise<void>;
+  resources?(): Promise<VmResourceState>;
+  modifyResources?(resources: VmResourceState, dryRun: boolean): Promise<VmPlan>;
 }
 class VmWorld implements WorldRuntime {
   private readonly game: SandboxGame;
   constructor(readonly id: string, private readonly sandbox: Sandbox) { this.game = new SandboxGame(sandbox); }
+  async resources() { return resourcesFromConfig(await this.sandbox.config()); }
+  async modifyResources(resources: VmResourceState, dryRun: boolean) {
+    const desired = vmResourceStateSchema.parse(resources);
+    const plan = await this.sandbox.modify({ ...desired, policy: 'no_restart', dryRun: true });
+    if (dryRun || plan.conflicts.length || plan.changes.some(c => c.disposition !== 'live')) return plan;
+    return this.sandbox.modify({ ...desired, policy: 'no_restart' });
+  }
   get identity() { return this.sandbox.id; }
   state() { return this.game.state(); }
   step(step: Step) { return this.game.step(step); }
@@ -37,16 +42,24 @@ class VmWorld implements WorldRuntime {
     const children = outcomes.flatMap(o => o.sandbox ? [new VmWorld(o.name, o.sandbox)] : []);
     const failed = outcomes.find(o => o.error);
     if (failed) {
-      await Promise.all(children.map(c => c.destroy()));
-      throw new Error(`Fork failed: ${failed.error?.message}`);
+      const cleanup = await Promise.allSettled(children.map(child => child.destroy()));
+      const errors = cleanup.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+      const failure = new Error(`Fork failed: ${failed.error?.message}`);
+      if (errors.length) throw new AggregateError([failure, ...errors], `${failure.message}; ${errors.length} child cleanup operation(s) failed`);
+      throw failure;
     }
     return children;
   }
 }
-export async function createWorld(id: string): Promise<WorldRuntime> {
+export interface WorldCreationOptions { image?: string; labels?: Record<string, string> }
+export async function createWorld(id: string, resources: VmResources = defaultVmSettings.defaults, options: WorldCreationOptions = {}): Promise<WorldRuntime> {
   const { Sandbox } = await import('microsandbox');
-  const sandbox = await Sandbox.builder(id).image('docker.io/library/node:24-alpine')
-    .detached(true).memory(1024).cpus(1).rootDisk(2048).label('app', 'multiverse-of-madness').create();
+  const config = vmResourcesSchema.parse(resources);
+  if (options.labels?.app !== undefined) throw new Error('World creation cannot replace the application ownership label');
+  const builder = Sandbox.builder(id).image(options.image ?? 'docker.io/library/node:24-alpine')
+    .detached(true).memory(config.memory).cpus(config.cpus).maxMemory(config.maxMemory).maxCpus(config.maxCpus).rootDisk(config.rootDiskSize).label('app', 'multiverse-of-madness');
+  for (const [key, value] of Object.entries(options.labels ?? {})) builder.label(key, value);
+  const sandbox = await builder.create();
   try {
     await sandbox.fs().mkdir('/game');
     for (const [local, guest] of [['dist/bridge.mjs', 'bridge.mjs'], ['assets/wasmdoom.wasm', 'wasmdoom.wasm'], ['assets/freedoom1.wad', 'freedoom1.wad']] as const) {

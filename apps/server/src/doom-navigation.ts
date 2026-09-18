@@ -1,5 +1,6 @@
 import type { GameState, Input } from '../../../packages/contracts/src/game.ts';
 import { doomInputs } from './doom-controls.ts';
+import type { PlanExecution } from './doom-plans.ts';
 import type { DoomMap } from './doom-geometry.ts';
 
 // Per-world, serializable motor memory. Forks copy it; sibling futures never
@@ -9,6 +10,11 @@ export interface NavigationMemory {
   blocked?: Array<{ heading: number; x: number; y: number; tick: number }>;
   stalled?: number;
   escape?: { heading: number; turn: 'left' | 'right'; x: number; y: number; tick: number };
+}
+/** Collision recovery belongs to one movement step, never a later aim/use step. */
+export function planNavigationMemory(memory: NavigationMemory | undefined, run: PlanExecution, previousStep: number): NavigationMemory | undefined {
+  const kind = run.plan.steps[run.step]?.kind;
+  return run.status === 'running' && run.step === previousStep && (kind === 'move' || kind === 'strafeAttack') ? memory : undefined;
 }
 const difference = (a: number, b: number) => ((a - b + 540) % 360 + 360) % 360 - 180;
 const movement = (inputs: Input[]) => inputs.some(i => ['forward', 'backward', 'strafeLeft', 'strafeRight'].includes(i));

@@ -4,6 +4,29 @@ A live TypeScript demo: Jev chooses actions, microsandbox forks the running Doom
 engine into alternate futures, and the best observed outcome becomes the main run.
 The browser is a viewer and controller. Doom WASM runs in Node.js inside each VM.
 
+## Games and saved sessions
+
+Use the gamepad button beside the title in either viewer to open **Games & sessions**.
+The current local demo links Doom on 4320, the original chess run on 4321, and the
+learning-enabled chess run on 4322. Switching changes the viewer only: each backend
+keeps its own game state, settings, learning journal and selected replay. Running
+games continue; pause a run first if you want it to stop while viewing another.
+The selector does not start servers or create/reset sessions.
+
+For different hosts, ports or session paths, set `GAME_SESSIONS_JSON` when building
+the web app. It is a public array of `{id, game, gameLabel, title, description, url}`
+objects, with unique IDs and absolute HTTP(S) URLs. Credentials are rejected and
+must never be included. For example:
+
+```sh
+GAME_SESSIONS_JSON='[{"id":"doom","game":"doom","gameLabel":"Doom","title":"Main run","description":"Current Doom session","url":"http://localhost:4317/"},{"id":"chess","game":"chess","gameLabel":"Chess","title":"Chess run","description":"Current chess session","url":"http://localhost:4321/"}]' npx vite build apps/web
+```
+
+Without an explicit catalog, loopback hosts use the local demo links above; other
+hosts show only the current session. See [the chess guide](examples/chess/README.md)
+for starting a separate chess or learning-enabled session. A shared session-creation
+workflow and explicit transition of historical plain-Jev runs remain unfinished.
+
 ## Run
 
 Requires Node.js 24+, a TypeSafe API key, and a host that supports microsandbox.
@@ -11,12 +34,20 @@ The complete workflow has been exercised on Apple Silicon macOS. The runtime
 installer also handles Linux arm64/x64; that platform has not been qualified here.
 
 ```sh
+git clone --recurse-submodules git@github.com:superradcompany/multiverse-of-madness.git
+cd multiverse-of-madness
+npm --prefix harness ci
 npm ci
 npm run setup
 cp .env.example .env
 # Add TYPESAFE_API_KEY to .env. Keep this file private.
 npm start
 ```
+
+The `harness/` directory is the separately versioned `gameplay-harness` Git
+submodule. For an existing clone, run `git submodule update --init --recursive`
+before installing dependencies. Access to both repositories is required while
+they are private.
 
 Open http://localhost:4317. The first start downloads the Node container image and
 creates a detached sandbox. Later starts reconnect to the saved session.
@@ -32,6 +63,18 @@ The web server binds to loopback. This is a local single-user demo, not a hosted
 multi-user service. The backend reads `.env`; credentials never enter the browser
 bundle or VM snapshot.
 
+The server reserves its HTTP port and a local process lease before opening session
+files. A second server using the same data directory is refused, including when
+the directory is reached through a symlink. The kernel releases the lease after a
+crash. Its loopback port is derived from the canonical directory; collisions with
+an unrelated listener also refuse startup. This lease covers one host, not a
+network-shared data directory. Stop older servers before upgrading: versions
+without a data lease are detected only by a conflict on their HTTP port.
+
+For a separate local session, set both `PORT` and `MOM_DATA_DIR`. The latter places
+the session, VM settings, recordings and movie exports under that directory. With
+no override the existing `.data` and `.cache/movie-exports` locations are preserved.
+
 ## Use
 
 - **Resume** runs the AI loop. **Pause** waits for dispatched inputs to finish.
@@ -40,10 +83,18 @@ bundle or VM snapshot.
   by default. **Playback settings** sets the winner review delay from 0 to 60 seconds;
   changing it also updates an active countdown. The setting survives reconnects
   and game restarts. The latest alternatives stay visible until the next batch.
+- **Playback settings → maximum futures per decision** selects 2–10 (default 4).
+  The next batch tests up to that many valid plans in parallel; larger batches
+  require more VM memory and model calls. The director shows all futures in a vertically scrolling grid. Its Grid selector
+  chooses 1, 2 or 3 columns and remembers your layout.
+  The setting survives reconnects and restarts.
 - The decision panel shows confidence against the threshold. Expand action
   preferences to inspect the distribution; these are not survival probabilities.
 - The player history icon opens recorded worlds. Scrub to a frame or play the
   recording, then return to live. Replay does not change the running simulation.
+- The sidebar follows the view: decision/recovery controls beside the grid,
+  focused progress and a compact world switcher for one world, and searchable
+  recording history plus MP4 export during replay.
 - Click a world to watch it. **Auto director** keeps the camera on the winner.
 - **Take control** fences AI actions before accepting WASD, arrow keys, space, and E.
   Pause/resume also works during human control. **Return to AI** leaves play paused.
@@ -68,9 +119,32 @@ Play starts paused, and previous browser control is released to AI. Interrupted
 fork creation and unfinished loser cleanup are reconciled from the saved journal.
 A replaced sandbox identity is rejected rather than silently opening a different run.
 
-Detached VMs retain RAM across backend exits, not host shutdowns. This demo does not
-yet create durable full snapshots for recovery after reboot. Missing or stopped
-VMs produce an explicit error; they are not silently replaced with a fresh game.
+Detached VMs retain RAM across backend exits, not host shutdowns. Saved execution
+checkpoints support explicit restoration into another sandbox. Startup still
+requires the selected detached VM: missing or stopped VMs produce an explicit
+error rather than silently replacing the session with a fresh game.
+
+## Replay and movie export
+
+Replay has play/pause, five-second skips, a game-time timeline, playback speed,
+fullscreen, and a recording picker. With the player focused, Space/K toggles play
+and arrow keys seek five seconds. Recording options include full ancestry or one
+world, refresh, and playing/exporting from the start through the current point.
+Replay and export do not alter the live simulation.
+
+The download icon exports the full selected recording as an H.264 MP4. Wait for
+encoding, then **Save MP4**. Export freezes the endpoint visible when requested;
+refresh the recording first to include newly recorded gameplay. Footage follows
+selected ancestry, holds sparse frames for their recorded game time, and exports
+at original speed regardless of playback speed. Existing recordings have no
+audio, so movies are silent. Missing history is disclosed before exporting only
+the available footage.
+
+`ffmpeg-static` supplies the local encoder. No upload is involved. Exports use
+`.cache/movie-exports`, with one encoder job at a time and two encoding threads.
+Cancel stops encoding and removes the partial movie. Unused outputs expire after
+30 minutes, and backend startup/shutdown cleans temporary exports. Source
+recordings are unchanged.
 
 ## Recorded gameplay
 
@@ -349,3 +423,68 @@ WASM: a guest-local inspector replaces only the engine wrapper, verifies every
 existing observation and the framebuffer, then closes the inspector. A failed
 verification restores the old wrapper and reports an error. Build before starting
 so `dist/engine.mjs` is available. Existing gameplay and recordings are preserved.
+
+### VM resources
+
+The server icon opens resource settings for the main world or any resident future, plus defaults for new games. CPU, memory, root disk size and boot-time ceilings are configurable. New defaults persist in `.data/vm-settings.json` and apply on game restart; forks and checkpoint restores inherit their source configuration.
+
+Pause before previewing or applying a per-world override. The backend uses the Microsandbox modification planner with `no_restart`; unsupported or restart-required changes are displayed without applying them. CPU/memory acceptance is distinct from actual convergence, which the result displays. The bundled runtime may not support live CPU/memory resizing. Use new-game defaults and Restart game for those changes.
+
+Optional session CPU and memory budgets count the source plus all resident futures. A batch that would exceed either budget is refused before branching. Zero disables the harness budget, not the host's resource limits. Resource totals are configured allocations, not measured usage. The future count is a maximum; fewer valid plans produce fewer sandboxes, and the grid displays the actual count alongside the decision's captured limit.
+
+Restored snapshots may omit the original root-disk size in their config. The VM panel labels this as retained checkpoint capacity; leaving that field blank preserves the disk. CPU/memory inspection and planning remain available without inventing a disk size.
+
+
+### Headless harness comparison
+
+After the normal asset/dependency setup and TypeSafe credentials, run:
+
+```sh
+npm run evaluate:harness -- --simulation-ticks=560 --model-calls=4 --scenarios=0 --candidate-threshold=1
+```
+
+This compares direct play against confidence-triggered futures using the real
+Doom engine and current session implementation. Each run receives the same total
+game-tick and model-call caps. Discarded futures and replay reconstruction count
+against the budget. Input/output tokens are recorded from Jev but are not capped.
+The clones use deterministic input replay, so this is not a VM-fork benchmark.
+
+A new directory under `artifacts/harness-evaluation/` contains the manifest,
+source snapshots, build hashes, per-run budget journals, observations, decisions,
+saved sessions and comparison. Existing output directories are refused. The
+included scenarios are diagnostic starts used previously, not new held-out
+acceptance cases. A passing illustrative score would not establish broad gameplay
+improvement. The live app's sandboxes and saved session are not used or changed.
+
+To qualify an isolated search-policy proposal through the supervisor controller:
+
+```sh
+npm run evaluate:harness -- --supervise --simulation-ticks=560 --model-calls=4 --scenarios=0 --candidate-threshold=1
+```
+
+The output directory includes `supervisor.json` (proposals, evidence references and
+activation history) and `active-profile.json`, verified after reopening the journal
+from disk. A rejected candidate leaves the experiment's baseline active. This
+command does not change the live game's settings. It currently qualifies policy
+changes only. Executable isolation and continuing-session activation are qualified
+in the chess example. Doom enables background learning automatically, with its status in the header and pause/provider controls in playback settings. The diagnostic scenarios/default provider model are not a held-out,
+fully pinned acceptance benchmark.
+
+Executable revision qualification is available with `npm run smoke:executor` and
+`npm run qualify:executor`. See [the isolated provider](packages/executor-microsandbox/README.md)
+and [the existing chess engine example](examples/chess/README.md) for the tested
+scope and current limitations. The chess dependency is pinned to 1.4.0; these
+commands do not change the live Doom game.
+
+The second-game session is runnable headlessly:
+
+```sh
+npm run example:chess -- run --directory .data/chess-demo --cycles 4
+npm run example:chess -- replay --directory .data/chess-demo --frame 2
+```
+
+It exercises the same shared workflow components with persistent chess worlds,
+whole-future promotion, selected replay ancestry and rollback. The default model is
+an explicit deterministic fixture. Add `--model jev` in a new directory for real
+TypeSafe decisions with a durable API-call limit. See [the chess guide](examples/chess/README.md)
+for continuation, guidance, configuration and runtime distinctions.

@@ -1,5 +1,7 @@
 # Gameplay harness: performance controls
 
+Current implementation and remaining acceptance work: [completion checklist](COMPLETION-CHECKLIST.md). Dated milestones below are historical evidence.
+
 This is the tuning map for Multiverse of Madness and the starting design for a
 harness that can support other games. The current implementation is a Doom
 adapter, not yet a game-independent engine. **Runtime** below means an existing
@@ -44,7 +46,7 @@ uses 35 game ticks per second. Game time excludes model/network/snapshot latency
 | Candidate menu size / variety | **Code:** `doomPlanPolicy.maxCandidates = 10`; one per available goal family before extra variants. | More coverage can help, but redundant choices consume context and split probabilities. This cap is separate from future count. |
 | Decision style | **Runtime:** plans (default) or single actions. | Plans carry a goal through conditional steps; action mode reasks after a fixed input interval. Compare them under the same budget. |
 | Confidence threshold | **Runtime:** default 0.75, range 0–1; fork below the threshold. Manual comparisons and stalled-progress comparisons can also fork. | Higher thresholds generally spend more simulation work. Measure quality versus cost; confidence is distribution concentration, not survival probability. |
-| Number of futures | **Code:** Session constructor `branches = 4`; up to four available ranked plans, with fewer when fewer are available. Retry offsets rotate candidates. | Breadth versus latency/VM budget. The count is not proportional to confidence. Candidate-menu variety does not guarantee diverse top-ranked futures. |
+| Number of futures | **Runtime:** `maxFutures`, 2–10 (default 4), capped by available ranked plans. Captured before each batch decision; retries rotate candidates. Persists through reconnect and game restart. | Breadth versus latency/VM budget. The count is not proportional to confidence. Candidate-menu variety does not guarantee diverse top-ranked futures. |
 | Trial / comparison duration | **Runtime:** default 6 game seconds, range 1–60. Captured at batch start. | Longer trials expose delayed consequences but cost more and slow feedback. Short trials can undervalue turning, opening doors or collecting equipment. |
 | Fixed action interval | **Runtime:** default 1 game second, range 0.2–6, for single-action mode. | Long holds overshoot and miss events. **This is not a periodic Jev timer in plan mode.** Plans reask on completion/interruption, within the remaining trial horizon. |
 | Plan completion and interruption | **Code:** alignment, arrival, target outcome/loss, ammo exhaustion, death/map change, damage of 8 health, nearby new threat, obstruction and step deadlines. | Too eager: repeated judgments and abandoned goals. Too slow: unsafe commitment or wall-sticking. Measure interrupt reasons and useful completed plans. |
@@ -194,6 +196,17 @@ with supervision off and on under matched total budgets. Add presentation contro
 only when the consuming application needs them; the harness must work without a
 UI. Extraction, supervisor plumbing and UI work are distinct deliverables.
 
+### Supervisor authority: improving the learning system
+
+The supervisor must be able to improve the learning system itself, not only
+identify gameplay subgoals. This includes proposing policy, prompt, skill, memory,
+candidate/executor and code revisions, testing them in isolated experiments and
+promoting or rolling them back against independent measured outcomes. The user
+guide, canonical history, resource limits and acceptance evidence remain outside
+the mutable revision. See [SUPERVISOR-DESIGN.md](SUPERVISOR-DESIGN.md) for the
+revision lifecycle and Exo integration assessment. This is planned behavior;
+no supervisor integration has been implemented yet.
+
 ### What the supervisor needs to diagnose
 
 The motivating failure is repeatedly trying a locked door without recognizing
@@ -288,3 +301,15 @@ line of sight, complete inventory and live switch/door state.
 Design references: TypeSafe's [Choice](https://docs.typesafe.ai/primitives/choice)
 and [confidence](https://docs.typesafe.ai/confidence) contracts;
 classic Doom [use-line behavior](https://github.com/id-Software/DOOM/blob/master/linuxdoom-1.10/p_switch.c).
+
+### Exploration breadth and resource scheduling
+
+`maxFutures` currently controls simultaneous experiments. All feeds appear in a vertically scrolling director grid, with a persisted 1–3 column layout. Grid layout does not change the experiment count. The generic harness should separate total candidates tested, maximum resident sandboxes, and displayed feeds. A sandbox concurrency cap is still planned: batching requires durable queued trials and snapshot-based recreation, not just throttling model requests while all VMs remain resident.
+
+### Movie exports
+
+Replay exports use a frozen endpoint and the recorded ancestry. Doom supplies 35 ticks per second; sparse frames hold until the next recorded tick. Export is independent of playback speed. The generic harness should expose the game clock, retained path and frame reader; container/codec, output resolution, concurrent encoder budget and export retention are separate media settings. This demo exports silent H.264 MP4 at 960px width, limits encoding to one job and two threads, and expires unused exports after 30 minutes. Partial history must be explicitly accepted.
+
+### VM allocation controls
+
+The Doom adapter exposes CPU, memory, root disk and boot ceilings via a VM resource dialog. Defaults are persisted independently of a game reset. Optional total CPU/memory budgets gate a complete parallel batch before its lifecycle journal or branch call, counting the source and resident worlds. These budgets do not yet queue trials or change routing breadth automatically. Per-world edits require the session execution gate and use the runtime's `no_restart` planner; unsupported changes remain unapplied. Future and restored VM allocation follows the snapshot source, not a newly edited default. This belongs to the execution-provider boundary when extracting the generic harness.

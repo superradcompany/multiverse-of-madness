@@ -1,14 +1,18 @@
+import type { PreviousPlanFeedback } from './plan-feedback.ts';
+import { jevGuidance, learnedInstructions, learnedState, type JevLearning } from './jev-learning.ts';
 import { activeSkills, type AiSkill } from '../../../packages/contracts/src/skills.ts';
 import type { PickupMemory } from './doom-pickup-memory.ts';
 import { decisionStatistics, withDecisionContext, guideInstructions, type DecisionStatistics } from './decision-context.ts';
-import { bearingTo, candidatePlans, type RankedPlan } from './doom-plans.ts';
-import { choice, TypeSafeClient } from '@typesafe-ai/sdk';
+import { bearingTo, candidatePlans, type RankedPlan, type GamePlan } from './doom-plans.ts';
+import type { VersionRef } from '@multiverse/gameplay-harness';
+import { choice, TypeSafeClient, type SystemOneRequest, type ChoiceQuestion } from '@typesafe-ai/sdk';
 import { geometryFor } from './doom-geometry.ts';
 import { z } from 'zod';
 import { feedbackState, feedbackInstructions } from './doom-context.ts';
 import type { Experience } from './experience.ts';
 import type { EntityObservation } from '../../../packages/contracts/src/entity.ts';
 import type { GameState, Input } from '../../../packages/contracts/src/game.ts';
+import type { DoomPolicy } from './doom-policy.ts';
 
 export const actions = {
   advance: { label: 'push forward', inputs: ['forward', 'use'] },
@@ -22,23 +26,52 @@ export const actions = {
 } satisfies Record<string, { label: string; inputs: Input[] }>;
 export type ActionId = keyof typeof actions;
 export type Priority = 'survival' | 'exploration' | 'combat';
+/** Latest consumed request only, retained server-side for supervisor diagnosis. */
+export interface JevDecisionTrace {
+  tick: number; episode: number; map: number;
+  request: SystemOneRequest<Record<string, ChoiceQuestion>>;
+  model: string; selected: string; confidence: number; priority: Priority;
+  probabilities: Record<string, number>;
+  plans?: GamePlan[];
+}
 export interface Decision {
-  evidence?: { skills?: Array<Omit<AiSkill, "enabled">>; objective: string; stats: DecisionStatistics; experienceUsed: number };
+  jevTrace?: JevDecisionTrace;
+  selectedExperience?: Experience[];
+  preparation?: { revision: VersionRef; historyIndices: number[]; experienceIndices: number[]; features: Record<string, string | number | boolean>; planIds: string[] };
+  usage?: { inputTokens: number; outputTokens: number };
+  evidence?: { planningAhead?: DecisionContext['planningAhead']; workingGuide?: string; previousPlan?: PreviousPlanFeedback; skills?: Array<Omit<AiSkill, "enabled">>; objective: string; stats: DecisionStatistics; experienceUsed: number };
   plans?: { selected: string; candidates: RankedPlan[] };
   action: ActionId;
   probabilities: Record<ActionId, number>;
   confidence: number;
   priority: Priority;
   latencyMs: number;
+  waitMs?: number;
+  prefetched?: boolean;
   model: string;
   experienceUsed?: number;
   perception?: { profile: 'game-aware'; blockedEnemies: number; uncertainTargets: number; forwardBarrier: number; movementFailed: boolean; excludedActions: ActionId[] };
 }
-export interface DecisionContext { skills?: AiSkill[]; previousAction?: string; planTicks?: number; stats?: DecisionStatistics; visited?: string[]; pickups?: PickupMemory }
+export interface DecisionContext { previousPlan?: PreviousPlanFeedback; policy?: DoomPolicy; skills?: AiSkill[]; previousAction?: string; planTicks?: number; stats?: DecisionStatistics; visited?: string[]; pickups?: PickupMemory;
+  experiencePool?: Experience[];
+  /** An observed current plan, not a predicted future game state. */
+  planningAhead?: { plan: string; target: GamePlan['steps'][number]['target']; remainingTicks: number };
+  /** Only host-validated preparation output; browser/model responses cannot populate this directly. */
+  prepared?: { revision: VersionRef; plans?: GamePlan[]; features: Record<string, string | number | boolean> };
+}
+const preparationContext = <T extends object>(base: T, context?: DecisionContext) => ({
+  ...base,
+  ...(context?.planningAhead ? { planningAhead: context.planningAhead } : {}),
+  ...(context?.previousPlan ? { previousPlan: structuredClone(context.previousPlan) } : {}),
+  ...(context?.prepared ? { prepared: { revision: context.prepared.revision, features: context.prepared.features,
+    scope: 'Derived suggestions from versioned learning code, not observed facts. Current state, stats, objective and user skills remain authoritative.' } } : {}),
+});
 export interface DecisionMaker {
   decide(state: GameState, objective: string, history: GameState[], signal: AbortSignal, experience?: Experience[], actionTicks?: number, context?: DecisionContext): Promise<Decision>;
 }
 const probability = z.number().min(0).max(1);
+const tokenUsage = z.object({ input_tokens: z.number().int().nonnegative(), output_tokens: z.number().int().nonnegative() })
+  .transform(value => ({ inputTokens: value.input_tokens, outputTokens: value.output_tokens }));
 const actionIds = Object.keys(actions) as [ActionId, ...ActionId[]];
 const answerSchema = z.object({
   action: z.enum(actionIds), confidence: probability,
@@ -73,45 +106,57 @@ export function decisionState(state: GameState, objective: string, history: Game
 
 export type JevProfile = 'baseline' | 'game-aware';
 export class Jev implements DecisionMaker {
-  constructor(private readonly profile: JevProfile = 'game-aware', private readonly client: Pick<TypeSafeClient, 'systemOne'> = new TypeSafeClient({ timeout: 10_000, retry: { maxRetries: 0 } })) {}
+  private readonly learning?: JevLearning;
+  constructor(private readonly profile: JevProfile = 'game-aware', private readonly client: Pick<TypeSafeClient, 'systemOne'> = new TypeSafeClient({ timeout: 10_000, retry: { maxRetries: 0 } }), learning?: JevLearning) {
+    if (learning) {
+      if (!learning.model.trim() || learning.model.length > 128) throw new Error('Invalid Jev model identity');
+      this.learning = { model: learning.model, guidance: jevGuidance(learning.guidance) };
+    }
+  }
   async decide(state: GameState, objective: string, history: GameState[], signal: AbortSignal, experience?: Experience[], actionTicks = 35, context?: DecisionContext): Promise<Decision> {
     const started = performance.now();
     const map = this.profile === 'game-aware' ? await geometryFor(state, true, true) : undefined;
     const aware = map ? feedbackState(state, objective, history, map, actionTicks, experience, context?.previousAction) : undefined;
     if (aware && map && context?.planTicks && state.phase === 'level') return this.decidePlan(state, aware, map, context.planTicks, signal, started, context, experience ?? []);
-    const { input, experienceUsed } = withDecisionContext(aware ?? decisionState(state, objective, history, [], actionTicks), state, objective, context?.stats, experience ?? [], context?.skills);
+    const { input, experienceUsed } = withDecisionContext(preparationContext(aware ?? decisionState(state, objective, history, [], actionTicks), context), state, objective, context?.stats, experience ?? [], context?.skills);
     const criteria = aware ? feasibleActions(aware) : Object.fromEntries(Object.entries(actions).map(([id, a]) => [id, a.label]));
-    const result = await this.client.systemOne({
-      state: input,
+    const request = {
+      ...(this.learning ? { model: this.learning.model } : {}),
+      state: learnedState(input, this.learning?.guidance),
       questions: {
-        action: choice({ ...feedbackInstructions, guide: guideInstructions }, criteria),
-        priority: choice(`${guideInstructions} Which single priority best advances the user guide from these current statistics?`, {
+        action: choice(learnedInstructions({ ...feedbackInstructions, guide: guideInstructions }, 'action', this.learning?.guidance), criteria),
+        priority: choice(learnedInstructions(`${guideInstructions} Which single priority best advances the user guide from these current statistics?`, 'priority', this.learning?.guidance), {
           survival: 'Preserve life and recover health, avoid damage before pursuing other goals',
           exploration: 'Discover new space and reach the level exit while staying alive',
           combat: 'Defeat enemies while staying alive',
         }),
       },
-    }, { signal });
+    };
+    const capturedRequest = structuredClone(request);
+    const result = await this.client.systemOne(request, { signal });
     const parsed = answerSchema.parse({ action: result.answers.action.choice, confidence: result.answers.action.confidence,
       probabilities: Object.fromEntries(actionIds.map(id => [id, result.answers.action.probabilities[id] ?? 0])), priority: result.answers.priority.choice });
     if (!(parsed.action in criteria)) throw new Error('Jev selected an unavailable action');
     const sum = Object.values(parsed.probabilities).reduce((a, b) => a + b, 0);
     if (Math.abs(sum - 1) > 0.02) throw new Error('Jev returned an invalid probability distribution');
-    return { ...parsed, latencyMs: performance.now() - started, model: result.model,
-      experienceUsed, evidence: { skills: activeSkills(context?.skills ?? []), objective, stats: context?.stats ?? decisionStatistics(state), experienceUsed },
+    return { ...parsed, jevTrace: { tick: state.tick, episode: state.episode, map: state.map, request: capturedRequest,
+      model: result.model, selected: parsed.action, confidence: parsed.confidence, priority: parsed.priority, probabilities: { ...parsed.probabilities } }, usage: tokenUsage.parse(result.usage), latencyMs: performance.now() - started, model: result.model,
+      experienceUsed, evidence: { planningAhead: context?.planningAhead, workingGuide: this.learning?.guidance.prompts.guide, previousPlan: context?.previousPlan, skills: activeSkills(context?.skills ?? []), objective, stats: context?.stats ?? decisionStatistics(state), experienceUsed },
       perception: aware ? { profile: 'game-aware', blockedEnemies: aware.blockedEnemyCount,
         uncertainTargets: aware.targetsNotBehindSolidWalls.filter(e => e.visibility === 'dynamic-opening-unknown').length,
         forwardBarrier: aware.movement.barrierDistances.ahead, movementFailed: aware.movementFailed,
         excludedActions: actionIds.filter(id => !(id in criteria)) } : undefined };
   }
   private async decidePlan(state: GameState, input: ReturnType<typeof feedbackState>, map: Awaited<ReturnType<typeof geometryFor>>, ticks: number, signal: AbortSignal, started: number, context: DecisionContext, experience: Experience[]): Promise<Decision> {
-    const plans = candidatePlans(state, map, context.visited, context.pickups);
+    const plans = context.prepared?.plans ?? candidatePlans(state, map, context.visited, context.pickups);
     const criteria = Object.fromEntries(plans.map(p => [p.id, `${p.label}${p.evidence ? ` (${p.evidence})` : ''}: ${p.steps.map(s => `${s.label} (at most ${s.maxTicks / 35}s)`).join(' → ')}. ${p.novelty === undefined ? '' : p.novelty > 0 ? 'Leads toward unvisited space. ' : 'Returns to already visited space. '}Target ${Math.round(Math.hypot(p.steps[0]!.target.x - state.x, p.steps[0]!.target.y - state.y))} units away, bearing ${Math.round(bearingTo(state, p.steps[0]!.target))} degrees (+left, -right).`]));
-    const envelope = withDecisionContext({ ...input, trialSeconds: ticks / 35 }, state, input.objective, context.stats, experience, context.skills);
-    const result = await this.client.systemOne({ state: envelope.input, questions: {
-      plan: choice(`${guideInstructions} Which available conditional plan best advances the objective within trialSeconds? Steps end on observed conditions. Code handles immediate collision recovery and aiming. The plan is interrupted on significant damage, a new nearby threat, lost target, or a time limit. Prefer feasible useful progress; map clearance does not guarantee reachability.`, criteria),
-      priority: choice(`${guideInstructions} Which priority best advances the user guide from these current statistics?`, { survival: 'Preserve life and recover health', exploration: 'Explore and reach the exit', combat: 'Defeat enemies while surviving' }),
-    } }, { signal });
+    const envelope = withDecisionContext(preparationContext({ ...input, trialSeconds: ticks / 35 }, context), state, input.objective, context.stats, experience, context.skills);
+    const request = { ...(this.learning ? { model: this.learning.model } : {}), state: learnedState(envelope.input, this.learning?.guidance), questions: {
+      plan: choice(learnedInstructions(`${guideInstructions} Which available conditional plan best advances the objective within trialSeconds? Steps end on observed conditions. Code handles immediate collision recovery and aiming. The plan is interrupted on significant damage, a new nearby threat, lost target, or a time limit. Prefer feasible useful progress; map clearance does not guarantee reachability.`, 'plan', this.learning?.guidance), criteria),
+      priority: choice(learnedInstructions(`${guideInstructions} Which priority best advances the user guide from these current statistics?`, 'priority', this.learning?.guidance), { survival: 'Preserve life and recover health', exploration: 'Explore and reach the exit', combat: 'Defeat enemies while surviving' }),
+    } };
+    const capturedRequest = structuredClone(request);
+    const result = await this.client.systemOne(request, { signal });
     const selected = result.answers.plan.choice;
     if (!plans.some(p => p.id === selected)) throw new Error('Jev selected an unavailable plan');
     const candidates = plans.map(p => ({ ...p, probability: probability.parse(result.answers.plan.probabilities[p.id] ?? 0) }));
@@ -121,8 +166,11 @@ export class Jev implements DecisionMaker {
     const opening = (p: RankedPlan): ActionId => { const angle = bearingTo(state, p.steps[0]!.target); return angle > 7 ? 'left' : angle < -7 ? 'right' : 'advance'; };
     const probabilities = Object.fromEntries(actionIds.map(id => [id, candidates.filter(p => opening(p) === id).reduce((n, p) => n + p.probability, 0)])) as Record<ActionId, number>;
     return { action: opening(candidates.find(p => p.id === selected)!), probabilities,
+      jevTrace: { tick: state.tick, episode: state.episode, map: state.map, request: capturedRequest, model: result.model,
+        selected, confidence: probability.parse(result.answers.plan.confidence), priority: z.enum(['survival', 'exploration', 'combat']).parse(result.answers.priority.choice),
+        probabilities: Object.fromEntries(candidates.map(plan => [plan.id, plan.probability])), plans: structuredClone(plans) }, usage: tokenUsage.parse(result.usage),
       plans: { selected, candidates }, confidence: probability.parse(result.answers.plan.confidence), priority: z.enum(['survival', 'exploration', 'combat']).parse(result.answers.priority.choice),
-      latencyMs: performance.now() - started, model: result.model, experienceUsed: envelope.experienceUsed, evidence: { skills: activeSkills(context.skills ?? []), objective: input.objective, stats: context.stats ?? decisionStatistics(state), experienceUsed: envelope.experienceUsed } };
+      latencyMs: performance.now() - started, model: result.model, experienceUsed: envelope.experienceUsed, evidence: { planningAhead: context?.planningAhead, workingGuide: this.learning?.guidance.prompts.guide, previousPlan: context.previousPlan, skills: activeSkills(context.skills ?? []), objective: input.objective, stats: context.stats ?? decisionStatistics(state), experienceUsed: envelope.experienceUsed } };
   }
 
 }

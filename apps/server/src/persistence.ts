@@ -1,28 +1,16 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { JsonFileStore } from '@multiverse/gameplay-harness/node';
 import type { SessionCheckpoint } from './session.ts';
 
-export class SessionStore {
-  private writes: Promise<void> = Promise.resolve();
-  constructor(private readonly path: string) {}
-  async load(): Promise<SessionCheckpoint | undefined> {
-    try {
-      const result = JSON.parse(await readFile(this.path, 'utf8'));
-      if (result.version !== 1 || !Array.isArray(result.worlds) || typeof result.view?.mainId !== 'string') throw new Error('Unsupported or invalid session file');
-      return result;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-      throw error;
-    }
-  }
-  save(checkpoint: SessionCheckpoint): Promise<void> {
-    const body = JSON.stringify(checkpoint);
-    this.writes = this.writes.then(async () => {
-      await mkdir(dirname(this.path), { recursive: true });
-      await writeFile(`${this.path}.tmp`, body, { mode: 0o600 });
-      await rename(`${this.path}.tmp`, this.path);
+// Preserve the existing demo snapshot shape. Its version/import policy belongs
+// to the consuming application, not the generic storage implementation.
+export class SessionStore extends JsonFileStore<SessionCheckpoint> {
+  constructor(path: string) {
+    super(path, value => {
+      if (!value || typeof value !== 'object' || !('version' in value) || (value.version !== 1 && value.version !== 2)
+        || !('worlds' in value) || !Array.isArray(value.worlds) || !('view' in value)
+        || !value.view || typeof value.view !== 'object' || !('mainId' in value.view)
+        || typeof value.view.mainId !== 'string') throw new Error('Unsupported or invalid session file');
+      return value as SessionCheckpoint;
     });
-    return this.writes;
   }
-  async flush() { await this.writes; }
 }

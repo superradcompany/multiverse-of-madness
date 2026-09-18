@@ -5,12 +5,17 @@ import { DoomEngine } from '../../../packages/game-bridge/src/engine.ts';
 import { decisionStatistics, withDecisionContext } from './decision-context.ts';
 import { initialStats } from './run-stats.ts';
 import { Jev } from './jev.ts';
+import { previousPlanFeedback } from './plan-feedback.ts';
+import { startPlan, stopPlan } from './doom-plans.ts';
 import { ExperienceMemory } from './experience.ts';
 
 test('every live question shares the current statistics and primary guide in plans and action modes', async () => {
   const game = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad'), state = game.state();
   const skills = [{ id: '4f86d319-f385-4895-90a1-956ebcfb9b99', name: 'Health first', instructions: 'Collect health before fighting.', enabled: true }, { id: '0f86d319-f385-4895-90a1-956ebcfb9b99', name: 'Disabled tactic', instructions: 'Must not reach Jev', enabled: false }];
   const stats = initialStats(state); stats.kills = 9; stats.damage = 18; stats.ticks = 350;
+  const run = startPlan({ id: 'blocked', label: 'failed route', steps: [{ kind: 'move', label: 'reach supplies', target: { kind: 'point', x: 100, y: 0, z: 0 }, maxTicks: 35 }] }, state, 210);
+  stopPlan(run, 'replan', 'route blocked');
+  const previousPlan = previousPlanFeedback(run, state)!;
   for (const profile of ['game-aware', 'baseline'] as const) for (const planTicks of [undefined, 210]) {
     let request: any;
     const client = { systemOne: async (body: any) => {
@@ -19,9 +24,20 @@ test('every live question shares the current statistics and primary guide in pla
         const ids = Object.keys(question.criteria), choice = ids[0];
         return [key, { choice, confidence: .8, probabilities: Object.fromEntries(ids.map(id => [id, id === choice ? 1 : 0])) }];
       }));
-      return { model: 'test', answers };
+      return { model: 'test', answers, usage: { input_tokens: 100, output_tokens: 12 } };
     } } as unknown as Pick<TypeSafeClient, 'systemOne'>;
-    const result = await new Jev(profile, client).decide(state, 'Collect health before combat.', [], new AbortController().signal, [], 35, { skills, planTicks, stats: decisionStatistics(state, stats), visited: stats.visited });
+    const result = await new Jev(profile, client).decide(state, 'Collect health before combat.', [], new AbortController().signal, [], 35, { previousPlan, skills, planTicks, stats: decisionStatistics(state, stats), visited: stats.visited });
+    assert.deepEqual(request.state.previousPlan, previousPlan);
+    assert.deepEqual(result.evidence?.previousPlan, previousPlan);
+    for (const q of Object.values(request.questions) as any[]) assert.match(JSON.stringify(q.instructions), /previousPlan/);
+    assert.deepEqual(result.usage, { inputTokens: 100, outputTokens: 12 });
+    assert.deepEqual(result.jevTrace?.request, request, 'diagnostic request is exactly what the SDK received');
+    assert.equal(result.jevTrace?.tick, state.tick);
+    assert.equal(result.jevTrace?.selected, result.plans?.selected ?? result.action);
+    assert.deepEqual(result.jevTrace?.plans, result.plans?.candidates.map(({ probability, ...plan }) => plan));
+    request.state.objective = 'mutated after response';
+    assert.equal(result.jevTrace?.request.state && (result.jevTrace.request.state as any).objective, 'Collect health before combat.');
+    request.state.objective = 'Collect health before combat.';
     assert.deepEqual(request.state.skills, skills.filter(s => s.enabled).map(({ enabled, ...s }) => s));
     assert.deepEqual(result.evidence?.skills, request.state.skills);
     for (const q of Object.values(request.questions) as any[]) assert.match(JSON.stringify(q.instructions), /Apply relevant instructions from `skills`/);
@@ -52,7 +68,7 @@ test('Jev gets lock evidence without a mandated key subgoal', async () => {
   let request:any;
   const client={systemOne:async(body:any)=>{
     request=body;
-    return {model:'test',answers:Object.fromEntries(Object.entries(body.questions).map(([key,q]:[string,any])=>{
+    return {model:'test',usage:{input_tokens:100,output_tokens:12},answers:Object.fromEntries(Object.entries(body.questions).map(([key,q]:[string,any])=>{
       const ids=Object.keys(q.criteria),choice=ids.find(id=>id.startsWith('explore'))??ids[0];
       return [key,{choice,confidence:.9,probabilities:Object.fromEntries(ids.map(id=>[id,id===choice?1:0]))}];
     }))};

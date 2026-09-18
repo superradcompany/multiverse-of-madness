@@ -6,6 +6,7 @@ import { cell } from './run-stats.ts';
 import type { GameState, Input } from '../../../packages/contracts/src/game.ts';
 import type { PlanView } from '../../../packages/contracts/src/session.ts';
 import type { DoomMap } from './doom-geometry.ts';
+import { plausibleRangedTarget } from './doom-targeting.ts';
 
 interface Point { x: number; y: number; z: number }
 export interface PlanTarget extends Point { kind: 'point' | 'enemy' | 'pickup'; engineType?: number }
@@ -25,10 +26,16 @@ const attack = (target: PlanTarget): PlanStep => ({ kind: 'attack', target, labe
 
 export function candidatePlans(state: GameState, map: DoomMap, visited?: string[], pickups?: PickupMemory): GamePlan[] {
   const plans: GamePlan[] = [];
-  const enemy = state.enemies.find(e => e.distance < 768 && map.sight(state, e.position) === 'unknown' && Math.abs(e.position.z - state.z) < 56 && state.enemies.filter(other => other.engineType === e.engineType && distance(other.position, e.position) < 8).length === 1);
+  const melee = ['fist', 'chainsaw'].includes(state.weapon ?? '');
+  const enemy = state.enemies.find(e => e.distance < 768 && plausibleRangedTarget(state, e, map)
+    && (!melee || Math.abs(e.position.z - state.z) < 56)
+    && state.enemies.filter(other => other.engineType === e.engineType && distance(other.position, e.position) < 8).length === 1);
   if (enemy && canAttack(state)) {
     const target: PlanTarget = { ...enemy.position, kind: 'enemy', engineType: enemy.engineType };
-    plans.push({ id: 'engage', family: 'combat', label: 'engage the enemy', steps: [face(target), ...(enemy.distance > (['fist', 'chainsaw'].includes(state.weapon ?? '') ? 48 : 224) ? [{ ...move(target, ['fist', 'chainsaw'].includes(state.weapon ?? '') ? 40 : 192), label: 'approach firing range' }] : []), attack(target)] });
+    // A firing angle does not establish a walkable route onto another floor.
+    // Ranged weapons can engage from here; do not chase a ledge before firing.
+    const approach = enemy.distance > (melee ? 48 : 224) && (melee || Math.abs(enemy.position.z - state.z) <= 24);
+    plans.push({ id: 'engage', family: 'combat', label: 'engage the enemy', steps: [face(target), ...(approach ? [{ ...move(target, melee ? 40 : 192), label: 'approach firing range' }] : []), attack(target)] });
   }
   const pickup = state.pickups.find(p => [45, 53, 54, 55].includes(p.engineType)
     && state.health < ([45, 55].includes(p.engineType) ? 200 : 100)

@@ -12,3 +12,4 @@ assets/*.wad
 assets/*.wasm
 artifacts/
 .data/
+.data-*/

@@ -1,0 +1,1002 @@
+{
+  "version": 1,
+  "recovery": {
+    "policy": {
+      "enabled": false,
+      "maxRetries": 2,
+      "healthLoss": 15,
+      "stallSeconds": 15
+    },
+    "points": [
+      {
+        "id": "7f4587e4-5dcc-499b-abc3-4b94f81b79a7",
+        "reference": "mom-checkpoint-7f4587e4-5dcc-499b-abc3-4b94f81b79a7:recovery",
+        "createdAt": 1789688895576,
+        "world": {
+          "generation": 0,
+          "role": "main",
+          "label": "main session",
+          "id": "legacy-root",
+          "state": {
+            "tick": 35,
+            "health": 100,
+            "armor": 0,
+            "ammo": [
+              50,
+              0,
+              0,
+              0
+            ],
+            "kills": 0,
+            "items": 0,
+            "secrets": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "angle": 0,
+            "episode": 1,
+            "map": 1,
+            "phase": "level",
+            "alive": true,
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "enemies": [],
+            "projectiles": [],
+            "pickups": [],
+            "telemetry": {
+              "radius": 2048,
+              "lineOfSightKnown": false,
+              "engineObjectCount": 1
+            }
+          },
+          "status": "paused",
+          "controller": "ai",
+          "frameVersion": 1
+        },
+        "history": [
+          {
+            "tick": 35,
+            "health": 100,
+            "armor": 0,
+            "ammo": [
+              50,
+              0,
+              0,
+              0
+            ],
+            "kills": 0,
+            "items": 0,
+            "secrets": 0,
+            "x": 0,
+            "y": 0,
+            "z": 0,
+            "angle": 0,
+            "episode": 1,
+            "map": 1,
+            "phase": "level",
+            "alive": true,
+            "velocity": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "enemies": [],
+            "projectiles": [],
+            "pickups": [],
+            "telemetry": {
+              "radius": 2048,
+              "lineOfSightKnown": false,
+              "engineObjectCount": 1
+            }
+          }
+        ],
+        "stats": {
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "levels": 0,
+          "ticks": 0,
+          "damage": 0,
+          "healing": 0,
+          "ammoSpent": 0,
+          "visited": [
+            "1:1:0:0:0"
+          ],
+          "lastProgressTick": 35,
+          "lastKillTick": 35,
+          "partial": false
+        },
+        "pickups": {
+          "episode": 1,
+          "map": 1,
+          "entries": []
+        }
+      }
+    ],
+    "cleanup": [],
+    "failures": 0,
+    "message": "Checkpoint saved at 1.0s with 100 health."
+  },
+  "attempts": {
+    "ticks": 14,
+    "kills": 0,
+    "deaths": 0,
+    "rejectedBatches": 0,
+    "retries": 0,
+    "rollbacks": 0
+  },
+  "experience": {
+    "enabled": true,
+    "records": [
+      {
+        "worldId": "legacy-root-g1-mu66k5so-0",
+        "action": "push forward",
+        "start": {
+          "episode": 1,
+          "map": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "health": 100,
+          "ammo": true
+        },
+        "result": {
+          "ticks": 7,
+          "health": 0,
+          "kills": 0,
+          "ammo": 0,
+          "moved": 0,
+          "died": false,
+          "exited": false
+        }
+      },
+      {
+        "worldId": "legacy-root-g1-mu66k5so-1",
+        "action": "turn left and move",
+        "start": {
+          "episode": 1,
+          "map": 1,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "health": 100,
+          "ammo": true
+        },
+        "result": {
+          "ticks": 7,
+          "health": 0,
+          "kills": 0,
+          "ammo": 0,
+          "moved": 0,
+          "died": false,
+          "exited": false
+        }
+      }
+    ],
+    "capacity": 128,
+    "contextLimit": 2
+  },
+  "view": {
+    "worlds": [
+      {
+        "generation": 0,
+        "role": "main",
+        "label": "main session",
+        "id": "legacy-root",
+        "state": {
+          "tick": 35,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 1
+      },
+      {
+        "role": "experiment",
+        "parentId": "legacy-root",
+        "generation": 1,
+        "label": "push forward",
+        "probability": 0.125,
+        "currentAction": "push forward",
+        "id": "legacy-root-g1-mu66k5so-0",
+        "state": {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 2,
+        "trial": {
+          "elapsed": 7,
+          "total": 7,
+          "healthChange": 0,
+          "kills": 0,
+          "distance": 0
+        },
+        "thinking": false,
+        "score": 0
+      },
+      {
+        "role": "experiment",
+        "parentId": "legacy-root",
+        "generation": 1,
+        "label": "turn left and move",
+        "probability": 0.125,
+        "currentAction": "turn left and move",
+        "id": "legacy-root-g1-mu66k5so-1",
+        "state": {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 2,
+        "trial": {
+          "elapsed": 7,
+          "total": 7,
+          "healthChange": 0,
+          "kills": 0,
+          "distance": 0
+        },
+        "thinking": false,
+        "score": 0
+      }
+    ],
+    "mainId": "legacy-root",
+    "running": false,
+    "busy": false,
+    "stage": "choosing",
+    "planningMode": "plans",
+    "objective": "survive and reach the exit",
+    "commentary": [
+      {
+        "id": 1,
+        "worldId": "legacy-root",
+        "text": "Main session ready. Resume AI play or take control.",
+        "at": 1789688895576
+      },
+      {
+        "id": 2,
+        "worldId": "legacy-root",
+        "text": "Checkpoint saved at 1.0s with 100 health.",
+        "at": 1789688895576
+      },
+      {
+        "id": 3,
+        "worldId": "legacy-root",
+        "text": "Experience enabled. Relevant observed attempts will inform the next decision.",
+        "at": 1789688895576
+      },
+      {
+        "id": 4,
+        "worldId": "legacy-root",
+        "text": "You requested a comparison. Testing alternate approaches from this moment.",
+        "at": 1789688895576
+      },
+      {
+        "id": 5,
+        "worldId": "legacy-root-g1-mu66k5so-0",
+        "text": "Forked at tick 35. Testing push forward.",
+        "at": 1789688895576
+      },
+      {
+        "id": 6,
+        "worldId": "legacy-root-g1-mu66k5so-1",
+        "text": "Forked at tick 35. Testing turn left and move.",
+        "at": 1789688895577
+      },
+      {
+        "id": 7,
+        "worldId": "legacy-root-g1-mu66k5so-0",
+        "text": "Trial finished: health 100, ammo 50, 0 new map kills during this trial.",
+        "at": 1789688895577
+      },
+      {
+        "id": 8,
+        "worldId": "legacy-root-g1-mu66k5so-1",
+        "text": "Trial finished: health 100, ammo 50, 0 new map kills during this trial.",
+        "at": 1789688895577
+      },
+      {
+        "id": 9,
+        "worldId": "legacy-root",
+        "text": "Experiments finished. Outcomes are ready to compare.",
+        "at": 1789688895577
+      }
+    ],
+    "forkThreshold": 0.75,
+    "winnerDelaySeconds": 0,
+    "decisionIntervalTicks": 35,
+    "trialDurationTicks": 7,
+    "confidence": 0.3,
+    "model": "test",
+    "routing": {
+      "direct": 0,
+      "uncertain": 0,
+      "manual": 1
+    },
+    "comparison": {
+      "candidateIds": [
+        "legacy-root-g1-mu66k5so-0",
+        "legacy-root-g1-mu66k5so-1"
+      ],
+      "bestId": "legacy-root-g1-mu66k5so-0",
+      "selected": false,
+      "reason": "Best measured exploration outcome: 100 health (+0), 0 kills, 0 units moved."
+    },
+    "decision": {
+      "kind": "action",
+      "action": "push forward",
+      "mode": "manual",
+      "threshold": 0.75,
+      "sourceId": "legacy-root",
+      "tick": 35,
+      "latencyMs": 0,
+      "preferences": [
+        {
+          "action": "push forward",
+          "probability": 0.125,
+          "tested": true
+        },
+        {
+          "action": "turn left and move",
+          "probability": 0.125,
+          "tested": true
+        },
+        {
+          "action": "turn right and move",
+          "probability": 0.125,
+          "tested": false
+        },
+        {
+          "action": "retreat and fire",
+          "probability": 0.125,
+          "tested": false
+        },
+        {
+          "action": "strafe left and fire",
+          "probability": 0.125,
+          "tested": false
+        },
+        {
+          "action": "strafe right and fire",
+          "probability": 0.125,
+          "tested": false
+        },
+        {
+          "action": "hold position and fire",
+          "probability": 0.125,
+          "tested": false
+        },
+        {
+          "action": "wait briefly",
+          "probability": 0.125,
+          "tested": false
+        }
+      ]
+    },
+    "directorWorldIds": [
+      "legacy-root-g1-mu66k5so-0",
+      "legacy-root-g1-mu66k5so-1"
+    ],
+    "recovery": {
+      "policy": {
+        "enabled": false,
+        "maxRetries": 2,
+        "healthLoss": 15,
+        "stallSeconds": 15
+      },
+      "failures": 0,
+      "message": "Checkpoint saved at 1.0s with 100 health.",
+      "checkpoints": [
+        {
+          "id": "7f4587e4-5dcc-499b-abc3-4b94f81b79a7",
+          "createdAt": 1789688895576,
+          "tick": 35,
+          "health": 100,
+          "kills": 0,
+          "map": "E1M1"
+        }
+      ]
+    },
+    "stats": {
+      "kills": 0,
+      "items": 0,
+      "secrets": 0,
+      "levels": 0,
+      "seconds": 0,
+      "health": 100,
+      "armor": 0,
+      "ammo": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "damage": 0,
+      "healing": 0,
+      "ammoSpent": 0,
+      "cells": 1,
+      "partial": false,
+      "attempts": {
+        "seconds": 0.4,
+        "kills": 0,
+        "deaths": 0,
+        "rejectedBatches": 0,
+        "retries": 0,
+        "rollbacks": 0
+      }
+    },
+    "experience": {
+      "enabled": true,
+      "stored": 2,
+      "used": 0,
+      "capacity": 128,
+      "contextLimit": 2,
+      "evidence": []
+    }
+  },
+  "experiments": [
+    {
+      "id": "legacy-root-g1-mu66k5so-0",
+      "action": "advance",
+      "remaining": 0,
+      "nextDecisionTick": 70
+    },
+    {
+      "id": "legacy-root-g1-mu66k5so-1",
+      "action": "left",
+      "remaining": 0,
+      "nextDecisionTick": 70
+    }
+  ],
+  "baseline": {
+    "tick": 35,
+    "health": 100,
+    "armor": 0,
+    "ammo": [
+      50,
+      0,
+      0,
+      0
+    ],
+    "kills": 0,
+    "items": 0,
+    "secrets": 0,
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "angle": 0,
+    "episode": 1,
+    "map": 1,
+    "phase": "level",
+    "alive": true,
+    "velocity": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "enemies": [],
+    "projectiles": [],
+    "pickups": [],
+    "telemetry": {
+      "radius": 2048,
+      "lineOfSightKnown": false,
+      "engineObjectCount": 1
+    }
+  },
+  "priority": "exploration",
+  "cleanup": [],
+  "worlds": [
+    {
+      "view": {
+        "generation": 0,
+        "role": "main",
+        "label": "main session",
+        "id": "legacy-root",
+        "state": {
+          "tick": 35,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 1
+      },
+      "identity": "physical-legacy-root",
+      "frame": "eyJ0aWNrIjozNSwiaGVhbHRoIjoxMDAsImFybW9yIjowLCJhbW1vIjpbNTAsMCwwLDBdLCJraWxscyI6MCwiaXRlbXMiOjAsInNlY3JldHMiOjAsIngiOjAsInkiOjAsInoiOjAsImFuZ2xlIjowLCJlcGlzb2RlIjoxLCJtYXAiOjEsInBoYXNlIjoibGV2ZWwiLCJhbGl2ZSI6dHJ1ZSwidmVsb2NpdHkiOnsieCI6MCwieSI6MCwieiI6MH0sImVuZW1pZXMiOltdLCJwcm9qZWN0aWxlcyI6W10sInBpY2t1cHMiOltdLCJ0ZWxlbWV0cnkiOnsicmFkaXVzIjoyMDQ4LCJsaW5lT2ZTaWdodEtub3duIjpmYWxzZSwiZW5naW5lT2JqZWN0Q291bnQiOjF9fQ==",
+      "history": [
+        {
+          "tick": 35,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        }
+      ],
+      "stats": {
+        "kills": 0,
+        "items": 0,
+        "secrets": 0,
+        "levels": 0,
+        "ticks": 0,
+        "damage": 0,
+        "healing": 0,
+        "ammoSpent": 0,
+        "visited": [
+          "1:1:0:0:0"
+        ],
+        "lastProgressTick": 35,
+        "lastKillTick": 35,
+        "partial": false
+      },
+      "pickups": {
+        "episode": 1,
+        "map": 1,
+        "entries": []
+      }
+    },
+    {
+      "view": {
+        "role": "experiment",
+        "parentId": "legacy-root",
+        "generation": 1,
+        "label": "push forward",
+        "probability": 0.125,
+        "currentAction": "push forward",
+        "id": "legacy-root-g1-mu66k5so-0",
+        "state": {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 2,
+        "trial": {
+          "elapsed": 7,
+          "total": 7,
+          "healthChange": 0,
+          "kills": 0,
+          "distance": 0
+        },
+        "thinking": false,
+        "score": 0
+      },
+      "identity": "physical-legacy-root-g1-mu66k5so-0",
+      "frame": "eyJ0aWNrIjo0MiwiaGVhbHRoIjoxMDAsImFybW9yIjowLCJhbW1vIjpbNTAsMCwwLDBdLCJraWxscyI6MCwiaXRlbXMiOjAsInNlY3JldHMiOjAsIngiOjAsInkiOjAsInoiOjAsImFuZ2xlIjowLCJlcGlzb2RlIjoxLCJtYXAiOjEsInBoYXNlIjoibGV2ZWwiLCJhbGl2ZSI6dHJ1ZSwidmVsb2NpdHkiOnsieCI6MCwieSI6MCwieiI6MH0sImVuZW1pZXMiOltdLCJwcm9qZWN0aWxlcyI6W10sInBpY2t1cHMiOltdLCJ0ZWxlbWV0cnkiOnsicmFkaXVzIjoyMDQ4LCJsaW5lT2ZTaWdodEtub3duIjpmYWxzZSwiZW5naW5lT2JqZWN0Q291bnQiOjF9fQ==",
+      "history": [
+        {
+          "tick": 35,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        }
+      ],
+      "stats": {
+        "kills": 0,
+        "items": 0,
+        "secrets": 0,
+        "levels": 0,
+        "ticks": 7,
+        "damage": 0,
+        "healing": 0,
+        "ammoSpent": 0,
+        "visited": [
+          "1:1:0:0:0"
+        ],
+        "lastProgressTick": 35,
+        "lastKillTick": 35,
+        "partial": false
+      },
+      "pickups": {
+        "episode": 1,
+        "map": 1,
+        "entries": []
+      }
+    },
+    {
+      "view": {
+        "role": "experiment",
+        "parentId": "legacy-root",
+        "generation": 1,
+        "label": "turn left and move",
+        "probability": 0.125,
+        "currentAction": "turn left and move",
+        "id": "legacy-root-g1-mu66k5so-1",
+        "state": {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        "status": "paused",
+        "controller": "ai",
+        "frameVersion": 2,
+        "trial": {
+          "elapsed": 7,
+          "total": 7,
+          "healthChange": 0,
+          "kills": 0,
+          "distance": 0
+        },
+        "thinking": false,
+        "score": 0
+      },
+      "identity": "physical-legacy-root-g1-mu66k5so-1",
+      "frame": "eyJ0aWNrIjo0MiwiaGVhbHRoIjoxMDAsImFybW9yIjowLCJhbW1vIjpbNTAsMCwwLDBdLCJraWxscyI6MCwiaXRlbXMiOjAsInNlY3JldHMiOjAsIngiOjAsInkiOjAsInoiOjAsImFuZ2xlIjowLCJlcGlzb2RlIjoxLCJtYXAiOjEsInBoYXNlIjoibGV2ZWwiLCJhbGl2ZSI6dHJ1ZSwidmVsb2NpdHkiOnsieCI6MCwieSI6MCwieiI6MH0sImVuZW1pZXMiOltdLCJwcm9qZWN0aWxlcyI6W10sInBpY2t1cHMiOltdLCJ0ZWxlbWV0cnkiOnsicmFkaXVzIjoyMDQ4LCJsaW5lT2ZTaWdodEtub3duIjpmYWxzZSwiZW5naW5lT2JqZWN0Q291bnQiOjF9fQ==",
+      "history": [
+        {
+          "tick": 35,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        },
+        {
+          "tick": 42,
+          "health": 100,
+          "armor": 0,
+          "ammo": [
+            50,
+            0,
+            0,
+            0
+          ],
+          "kills": 0,
+          "items": 0,
+          "secrets": 0,
+          "x": 0,
+          "y": 0,
+          "z": 0,
+          "angle": 0,
+          "episode": 1,
+          "map": 1,
+          "phase": "level",
+          "alive": true,
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "enemies": [],
+          "projectiles": [],
+          "pickups": [],
+          "telemetry": {
+            "radius": 2048,
+            "lineOfSightKnown": false,
+            "engineObjectCount": 1
+          }
+        }
+      ],
+      "stats": {
+        "kills": 0,
+        "items": 0,
+        "secrets": 0,
+        "levels": 0,
+        "ticks": 7,
+        "damage": 0,
+        "healing": 0,
+        "ammoSpent": 0,
+        "visited": [
+          "1:1:0:0:0"
+        ],
+        "lastProgressTick": 35,
+        "lastKillTick": 35,
+        "partial": false
+      },
+      "pickups": {
+        "episode": 1,
+        "map": 1,
+        "entries": []
+      }
+    }
+  ]
+}

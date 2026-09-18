@@ -1,12 +1,12 @@
 import type { GameState, Input } from '../../../packages/contracts/src/game.ts';
 import type { DoomMap } from './doom-geometry.ts';
+import { plausibleRangedTarget } from './doom-targeting.ts';
 
 // Motor assistance, not a model judgment or a simulated future. Rechecked from
 // the current state each game tick. Unknown dynamic doors remain a limitation.
 export function doomInputs(state: GameState, requested: Input[], map: DoomMap, stopOnTarget = true): Input[] {
   if (!requested.length) return [];
-  const candidates = state.enemies.filter(e => map.sight(state, e.position) === 'unknown'
-    && Math.abs(e.position.z - state.z) <= Math.max(56, e.distance * .625));
+  const candidates = state.enemies.filter(e => plausibleRangedTarget(state, e, map));
   const aligned = candidates.some(e => Math.abs(e.relativeBearing) <= 6);
   let inputs = [...requested];
   const turning = inputs.includes('left') ? 1 : inputs.includes('right') ? -1 : 0;

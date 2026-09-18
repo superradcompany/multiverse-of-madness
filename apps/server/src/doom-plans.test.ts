@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DoomEngine } from '../../../packages/game-bridge/src/engine.ts';
-import { DoomMap } from './doom-geometry.ts';
+import { DoomMap, geometryFor } from './doom-geometry.ts';
+import { doomInputs } from './doom-controls.ts';
 import { candidatePlans, planInputs, startPlan, type GamePlan } from './doom-plans.ts';
 
 async function state() { return { ...(await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad')).state(), x: 0, y: 0, z: 0, angle: 0, enemies: [], pickups: [] }; }
@@ -58,6 +59,55 @@ test('attack plans replan when the target becomes obstructed or ammunition runs 
   assert.equal(blocked.reason, 'target became obstructed');
 });
 
+test('ranged plans offer elevated targets accepted by the motor without chasing their floor', async () => {
+  const s = await state();
+  for (const z of [-96, 96]) {
+    const enemy = { kind: 'enemy' as const, engineType: 1, health: 20, position: { x: 256, y: 0, z },
+      distance: 256, relativeBearing: 0, heading: 180, direction: { x: -1, y: 0 }, towardPlayerAlignment: 1 };
+    const before = { ...s, weapon: 'pistol', ammo: [50, 0, 0, 0], enemies: [enemy] };
+    const map = new DoomMap([]), plan = candidatePlans(before, map).find(p => p.id === 'engage');
+    assert.ok(plan);
+    assert.deepEqual(plan.steps.map(step => step.kind), ['face', 'attack']);
+    const requested = planInputs(startPlan(plan, before, 210), before, [], map);
+    assert.deepEqual(doomInputs(before, requested, map), ['fire']);
+    assert.ok(!candidatePlans({ ...before, weapon: 'fist' }, map).some(p => p.id === 'engage'), 'melee cannot reach another floor');
+    assert.ok(!candidatePlans({ ...before, ammo: [0, 0, 0, 0] }, map).some(p => p.id === 'engage'));
+    const wall = { a: { x: 128, y: -100 }, b: { x: 128, y: 100 }, blocksSight: true, blocksMovement: true, special: 0 };
+    const blocked = new DoomMap([wall]);
+    assert.ok(!candidatePlans(before, blocked).some(p => p.id === 'engage'));
+    assert.deepEqual(doomInputs(before, ['fire'], blocked), []);
+    const uncertain = new DoomMap([{ ...wall, blocksSight: false, front: { floor: 0, ceiling: 128, dynamic: true } }], true, true);
+    assert.ok(!candidatePlans(before, uncertain).some(p => p.id === 'engage'), 'unknown moving openings are not proven firing angles');
+    const steep = { ...before, enemies: [{ ...enemy, position: { ...enemy.position, z: 256 } }] };
+    assert.ok(!candidatePlans(steep, map).some(p => p.id === 'engage'));
+  }
+});
+
+test('real engine elevated opening encounter can be killed with the offered ranged plan', async () => {
+  const engine = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad');
+  // Reproduce by actual inputs, not position/health writes: the player is
+  // descending toward the first room while the target is 76 units below.
+  for (let tick = 0; tick < 86; tick++) engine.step({ ticks: 1, inputs: ['forward'] });
+  const initial = engine.state(), map = await geometryFor(initial, true, true);
+  const plan = candidatePlans(initial, map).find(p => p.id === 'engage');
+  assert.ok(plan);
+  assert.ok(Math.abs(plan.steps[0]!.target.z - initial.z) > 56, 'exercises the previously excluded height');
+  const run = startPlan(plan, initial, 210), history: typeof initial[] = [];
+  let current = initial;
+  for (let tick = 0; tick < 210 && run.status === 'running'; tick++) {
+    let inputs = planInputs(run, current, history, map);
+    if (run.status !== 'running') break;
+    if (!inputs.every(input => input === 'left' || input === 'right')) inputs = doomInputs(current, inputs, map);
+    history.push(current); if (history.length > 12) history.shift();
+    current = engine.step({ ticks: 1, inputs });
+  }
+  assert.equal(run.status, 'complete');
+  assert.equal(run.reason, 'target outcome observed');
+  assert.equal(current.kills - initial.kills, 1);
+  assert.equal(current.health, initial.health);
+  assert.ok(current.ammo[0]! < initial.ammo[0]!);
+});
+
 test('exploration prefers unseen destinations and can route through known space to a frontier', async () => {
   const { cell } = await import('./run-stats.ts');
   const { frontierRoute } = await import('./doom-plans.ts');
@@ -80,4 +130,15 @@ test('separate nearby enemies remain valid targets instead of excluding the enti
   const p = candidatePlans(before, new DoomMap([])).find(p => p.id === 'engage')!;
   assert.ok(p); const run = startPlan(p, before, 210);
   assert.deepEqual(planInputs(run, before, [], new DoomMap([])), ['fire']);
+});
+
+test('interaction attempts use the engine reach instead of refusing valid 48-to-64 unit targets', async () => {
+  const s = { ...(await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad')).state(), x: 0, y: 0, angle: 0 };
+  const make = (x: number) => startPlan({ id: 'use', label: 'use', steps: [{ kind: 'use', label: 'press use',
+    target: { kind: 'point', x, y: 0, z: s.z }, maxTicks: 35 }] }, s, 210);
+  for (const x of [54, 64]) {
+    const run = make(x); assert.deepEqual(planInputs(run, s, []), ['use']); assert.equal(run.status, 'running');
+  }
+  const outside = make(64.01); assert.deepEqual(planInputs(outside, s, []), []);
+  assert.equal(outside.reason, 'interaction out of reach');
 });

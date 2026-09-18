@@ -107,6 +107,11 @@ export class Soundtrack {
   private mix: AudioMix = { music: true, effects: true, volume: .15, playing: false, intensity: 0 };
   private lastCue = -10;
   private disposed = false;
+  constructor(initialStep = 0) {
+    // Restart on the last musical phrase so its pad is present immediately.
+    this.step = Number.isSafeInteger(initialStep) && initialStep >= 0 ? Math.floor(initialStep / 32) * 32 : 0;
+  }
+  get position() { return this.step; }
   update(mix: AudioMix) {
     this.mix = mix;
     const now = this.context.currentTime;

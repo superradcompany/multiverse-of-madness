@@ -1,4 +1,5 @@
-import { PlanProgress } from './plan-progress.tsx';
+import { useEffect, useRef, useState } from 'react';
+import { LayoutGrid } from 'lucide-react';
 import type { SessionView, WorldView } from '../../../packages/contracts/src/session.ts';
 
 export const frameUrl = (world: WorldView) => `/api/frame/${encodeURIComponent(world.id)}?v=${world.frameVersion}`;
@@ -17,26 +18,81 @@ function outcome(world: WorldView, session: SessionView) {
   if (!world.state.alive) return 'died · final frame';
   if (world.role === 'archived') return 'not selected · final frame';
   if (world.id === session.mainId) return `main session · ${session.stage === 'deciding' ? 'choosing next move' : world.status}`;
-  if (world.trial && world.trial.elapsed >= world.trial.total) return 'trial complete';
+  if (world.trial && world.trial.elapsed >= world.trial.total) return session.stage === 'choosing' ? 'judging' : 'ready for judging';
   return world.status === 'running' ? 'exploring' : 'paused';
 }
 
-export function Director({ session, onFocus, now }: { session: SessionView; onFocus: (id: string) => void; now: number }) {
+export function Director({ session, onFocus, phaseTitle, phaseDetail }: { session: SessionView; onFocus: (id: string) => void; now: number; phaseTitle: string; phaseDetail: string }) {
   const worlds = directorWorlds(session);
+  const main = session.worlds.find(world => world.id === session.mainId);
+  const mainIsSource = worlds.some(world => world.role === 'experiment' && world.parentId === session.mainId);
+  const cards = main && !worlds.some(world => world.id === main.id) ? [main, ...worlds] : worlds;
+  const [columns, setColumns] = useState(() => { const saved = Number(localStorage.getItem('mom-grid-columns')); return [1, 2, 3].includes(saved) ? saved : 2; });
+  const [autoScroll, setAutoScroll] = useState(() => localStorage.getItem('mom-grid-autoscroll') === 'true');
+  const grid = useRef<HTMLDivElement>(null);
+  const lastInteraction = useRef(0);
+  const [overflows, setOverflows] = useState(false);
+  useEffect(() => {
+    const element = grid.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => setOverflows(element.scrollHeight > element.clientHeight + 1));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [cards.length, columns]);
+  useEffect(() => { localStorage.setItem('mom-grid-autoscroll', String(autoScroll)); }, [autoScroll]);
+  useEffect(() => {
+    if (!autoScroll) return;
+    const timer = setInterval(() => {
+      const element = grid.current;
+      if (!element || document.hidden || element.matches(':hover') || element.contains(document.activeElement)
+        || Date.now() - lastInteraction.current < 8000 || element.scrollHeight <= element.clientHeight + 1) return;
+      const bottom = element.scrollHeight - element.clientHeight;
+      element.scrollTo({ top: element.scrollTop >= bottom - 2 ? 0 : Math.min(bottom, element.scrollTop + element.clientHeight),
+        behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [autoScroll]);
+  const batch = cards.map(w => w.id).join(',');
+  useEffect(() => { grid.current?.scrollTo({ top: 0 }); }, [batch, columns]);
+  useEffect(() => { localStorage.setItem('mom-grid-columns', String(columns)); }, [columns]);
   const continuing = worlds.some(w => w.id === session.mainId);
-  const preparing = session.stage === 'forking' && continuing;
   const source = session.worlds.find(w => w.id === (worlds[0]?.parentId ?? session.mainId));
-  const countdown = session.reviewEndsAt ? Math.max(0, Math.ceil((session.reviewEndsAt - now) / 1000)) : undefined;
+  const limit = session.decision?.futureLimit ?? session.maxFutures ?? 4;
+  const trials = worlds.filter(world => world.trial && world.trial.total > 0);
+  const trialTicks = trials.reduce((sum, world) => sum + world.trial!.total, 0);
+  const exploredTicks = trials.reduce((sum, world) => sum + (!world.state.alive || world.role === 'archived'
+    ? world.trial!.total : Math.min(world.trial!.total, Math.max(0, world.trial!.elapsed))), 0);
+  const progress = trialTicks ? exploredTicks / trialTicks : undefined;
   return <div className={`director ${continuing ? 'continuing' : ''}`}>
-    <div className="director-heading"><div><span className="director-eyebrow">{continuing ? 'chosen path · same view' : 'one moment · different approaches'}</span><h2>{preparing ? 'Creating the next futures…' : continuing ? 'The chosen world continues here' : session.stage === 'choosing' ? 'See how each approach ended' : worlds.length ? `Trying ${worlds.length} futures` : 'Creating alternate futures…'}</h2><p>{continuing ? session.comparison?.reason ?? 'The highlighted world is main. Other panes retain the previous outcomes.' : session.stage === 'choosing' ? session.comparison?.reason ?? 'No surviving future. The starting world is preserved.' : session.planningMode === 'plans' ? 'Each future tests a short plan. Watch its steps unfold; Jev reassesses when needed.' : 'Same starting state. Jev makes new decisions as each future unfolds.'}</p></div>{source && <div className="checkpoint-preview"><img src={frameUrl(source)} alt="Starting world, paused during exploration" /><span>started here · paused</span></div>}</div>
-    <div className="director-grid" style={{ '--world-count': worlds.length } as React.CSSProperties}>
+    <div className="director-heading">
+      <div className="director-phase">
+        <div className="director-title" title={`Maximum ${limit} parallel futures. Available approaches depend on the current game state.`}>
+          <span className={`director-status-dot ${session.running ? 'active' : ''}`} aria-hidden="true" />
+          <h2>{session.error ? 'Run paused' : phaseTitle}</h2>
+        </div>
+        <p>{session.error ? 'Resolve the session error before resuming play.' : phaseDetail}</p>
+      </div>
+      <div className="director-tools">
+        <details className="director-layout" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
+          <summary aria-label="Futures layout settings" title="Layout settings"><LayoutGrid size={17} aria-hidden="true" /></summary>
+          <div className="director-layout-panel">
+            <label className="grid-layout"><span>Columns</span><select aria-label="Futures grid columns" value={columns} onChange={e => setColumns(Number(e.target.value))}>{[1, 2, 3].map(n => <option key={n} value={n}>{n} {n === 1 ? 'column' : 'columns'}</option>)}</select></label>
+            {overflows && <label className="grid-auto-scroll" title="Scroll every 6 seconds; pauses while you interact with the grid"><input type="checkbox" checked={autoScroll} onChange={event => setAutoScroll(event.target.checked)} /> Auto-scroll extra futures</label>}
+          </div>
+        </details>
+      </div>
+    </div>
+    <div ref={grid} className="director-grid" data-columns={columns} aria-label="Live futures" tabIndex={0} onWheel={() => { lastInteraction.current = Date.now(); }} onPointerDown={() => { lastInteraction.current = Date.now(); }} style={{ '--columns': columns, '--rows': Math.min(2, Math.max(1, Math.ceil(cards.length / columns))) } as React.CSSProperties}>
       {!worlds.length && <div className="director-wait" role="status">Capturing the starting world and creating independent sandboxes…</div>}
-      {worlds.map((world, index) => <button key={world.id} className={`future-screen ${world.id === session.mainId || session.comparison?.bestId === world.id ? 'winner' : ''} ${!world.state.alive ? 'failed' : ''}`} onClick={() => onFocus(world.id)} aria-label={`Inspect future ${index + 1}: ${world.label}`}>
+      {cards.map(world => <button key={world.id} className={`future-screen ${world.id === session.mainId ? 'main-session' : ''} ${world.id === session.mainId || session.comparison?.bestId === world.id ? 'winner' : ''} ${!world.state.alive ? 'failed' : ''}`} onClick={() => onFocus(world.id)} aria-label={world.id === session.mainId ? `Inspect main session: ${world.label}` : `Inspect future ${worlds.findIndex(candidate => candidate.id === world.id) + 1}: ${world.label}`} aria-current={world.id === session.mainId ? 'true' : undefined}>
         <img src={frameUrl(world)} alt={`${world.label} ${world.status === 'running' ? 'live gameplay' : 'final or paused frame'}`} />
-        <div className="future-heading"><strong>{world.plan?.label ?? world.label}</strong><span>{outcome(world, session)}</span></div>
-        <div className="future-caption">{!world.plan && <strong>{world.id === session.mainId ? world.currentAction ?? 'main session' : session.comparison?.bestId === world.id ? 'best measured outcome' : world.currentAction ?? world.label}</strong>}<PlanProgress plan={world.plan} /><span>health {world.state.health} · {world.state.kills} map kills{world.trial ? ` · ${world.trial.healthChange < 0 ? `lost ${-world.trial.healthChange}` : `gained ${world.trial.healthChange}`} health · +${world.trial.kills} this trial` : ''}</span>{world.trial && <div className="future-progress"><span style={{ width: `${Math.min(100, world.trial.elapsed / world.trial.total * 100)}%` }} /></div>}<small>{world.trial ? `${(world.trial.elapsed / 35).toFixed(1)}s explored` : ''} · click to inspect</small></div>
+        <div className="future-heading"><strong title={world.plan?.label ?? world.label}>{world.id === session.mainId && <b className="main-session-badge">Main session</b>}{world.plan?.label ?? world.label}</strong><span>{world.id === session.mainId && mainIsSource ? `Starting point for these futures · ${world.status}` : outcome(world, session)}</span><div className="future-stats"><span>health {world.state.health}</span><span>{world.state.kills} kills</span></div></div>
+
       </button>)}
     </div>
-    <div className="director-footer" role="status">{continuing ? 'The highlighted world is main. Click any pane to inspect; the next futures will replace this batch.' : countdown !== undefined ? `Continuing with the winner in ${countdown}s · pause to inspect` : !session.running && !session.busy ? 'Session paused · inspect any future or resume to continue' : 'Watch all futures, or click one to hold your focus there.'}</div>
+    <div className="director-bottom">
+    {source && <details className="director-start"><summary>Starting point</summary><div className="director-start-content"><img src={frameUrl(source)} alt="Source world's latest frame" /><span>Source world · {source.label}<small>Latest source frame; this world may have continued since the fork.</small></span></div></details>}
+        {progress !== undefined && <span className="director-progress-text" title="Completed trial time across all futures. Ended futures count as complete; comparison follows when every future finishes.">Trials {Math.round(progress * 100)}% complete</span>}
+    </div>
   </div>;
 }
