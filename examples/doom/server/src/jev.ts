@@ -1,3 +1,5 @@
+import type { DoomGoalContext } from './doom-temporary-goal.ts';
+import type { DoomTemporaryGoal } from '../../contracts/src/temporary-goal.ts';
 import type { PreviousPlanFeedback } from './plan-feedback.ts';
 import { jevGuidance, learnedInstructions, learnedState, type JevLearning } from './jev-learning.ts';
 import { activeSkills, type AiSkill } from '../../contracts/src/skills.ts';
@@ -35,6 +37,7 @@ export interface JevDecisionTrace {
   plans?: GamePlan[];
 }
 export interface Decision {
+  temporaryGoal?: DoomTemporaryGoal;
   jevTrace?: JevDecisionTrace;
   selectedExperience?: Experience[];
   preparation?: { revision: VersionRef; historyIndices: number[]; experienceIndices: number[]; features: Record<string, string | number | boolean>; planIds: string[] };
@@ -54,6 +57,7 @@ export interface Decision {
 }
 export interface DecisionContext { previousPlan?: PreviousPlanFeedback; policy?: DoomPolicy; skills?: AiSkill[]; previousAction?: string; planTicks?: number; stats?: DecisionStatistics; visited?: string[]; pickups?: PickupMemory;
   experiencePool?: Experience[];
+  temporaryGoal?: DoomGoalContext;
   /** An observed current plan, not a predicted future game state. */
   planningAhead?: { plan: string; target: GamePlan['steps'][number]['target']; remainingTicks: number };
   /** Only host-validated preparation output; browser/model responses cannot populate this directly. */
@@ -61,6 +65,11 @@ export interface DecisionContext { previousPlan?: PreviousPlanFeedback; policy?:
 }
 const preparationContext = <T extends object>(base: T, context?: DecisionContext) => ({
   ...base,
+  ...(context?.temporaryGoal?.current?.record.status === 'active' ? { temporaryGoal: {
+    instruction: context.temporaryGoal.current.record.draft.instruction,
+    target: context.temporaryGoal.current.record.draft.target,
+    remainingTicks: context.temporaryGoal.current.record.expiresAt - context.temporaryGoal.frame.clock.value,
+  } } : {}),
   ...(context?.planningAhead ? { planningAhead: context.planningAhead } : {}),
   ...(context?.previousPlan ? { previousPlan: structuredClone(context.previousPlan) } : {}),
   ...(context?.prepared ? { prepared: { revision: context.prepared.revision, features: context.prepared.features,

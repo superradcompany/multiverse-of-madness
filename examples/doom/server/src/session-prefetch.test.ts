@@ -78,3 +78,32 @@ for (const change of ['goal', 'skills', 'damage'] as const) test(`prefetch is di
   } finally { finish(); await session.pause(); await paused; }
   assert.equal(session.snapshot().error, undefined);
 });
+
+test('a prepared goal that expires during prefetch cannot authorize the next plan', async () => {
+  const { proposeDoomTemporaryGoal } = await import('./doom-temporary-goal.ts');
+  let calls = 0, finish!: () => void;
+  const response = new Promise<void>(resolve => { finish = resolve; });
+  const session = new Session({ decide: async (state, _objective, _history, signal, _experience, _ticks, context) => {
+    calls++;
+    const value = nextPlan(calls === 1 ? 100 : 200);
+    if (calls === 2) {
+      value.temporaryGoal = proposeDoomTemporaryGoal({ key: 'short', instruction: 'Reach another opening', reason: 'Try a bounded detour',
+        evidence: ['current-state'], duration: 10, target: { kind: 'position', x: 200, y: 0, z: 0, within: 8 } }, context?.temporaryGoal, state);
+      await response; signal.throwIfAborted();
+    }
+    return value;
+  } }, { threshold: 0, branches: 2, horizon: 70, paceMs: 0 });
+  await session.initialize(new Runtime('goal-prefetch')); session.setPlanningMode('plans'); session.setDecisionInterval(35);
+  let paused: Promise<void> | undefined;
+  session.setRecorder(async world => {
+    if (world.state.tick >= initial.tick + 30) finish();
+    if (calls >= 3) paused ??= session.pause();
+  });
+  try {
+    session.resume(); await session.idle(); await paused;
+    assert.equal(calls, 3);
+    assert.equal(session.snapshot().decision?.prefetched, false);
+    assert.equal(session.snapshot().worlds[0]!.temporaryGoal, undefined);
+    assert.equal(session.snapshot().error, undefined);
+  } finally { finish(); await session.close(); }
+});

@@ -9,6 +9,7 @@ import { prepareDoomContext } from './doom-preparation.ts';
 import type { DoomExecutorDecision } from './doom-executor-model.ts';
 import type { Experience } from './experience.ts';
 import type { DoomPolicy } from './doom-policy.ts';
+import { proposeDoomTemporaryGoal } from './doom-temporary-goal.ts';
 
 /** Isolated editable retrieval/context/planning followed by Jev; host still owns facts, motor execution and evaluation. */
 export class DoomPreparedModel implements DecisionMaker {
@@ -34,13 +35,14 @@ export class DoomPreparedModel implements DecisionMaker {
       record: record => this.options.record({ revision: this.revision, input: record.input, output: record.output, receipt: record.receipt }),
       validate: prepareDoomContext,
     }, signal);
+    const temporaryGoal = proposeDoomTemporaryGoal(prepared.temporaryGoal, context.temporaryGoal, state);
     const decision = await this.options.ledger.run({ owner: this.revision.revision.version, operation: 'prepared-jev', reserve: { modelCalls: 1 }, observe: ['inputTokens', 'outputTokens'] }, async () => {
       const value = await this.jev.decide(state, objective, prepared.history, signal, prepared.experience, actionTicks,
-        { ...context, prepared: { revision: this.revision.executor, plans: prepared.plans, features: prepared.features } });
+        { ...context, ...(context.temporaryGoal ? { temporaryGoal: { ...context.temporaryGoal, current: temporaryGoal } } : {}), prepared: { revision: this.revision.executor, plans: prepared.plans, features: prepared.features } });
       if (!value.usage) throw new Error('Prepared Jev decision did not report usage');
       return { value, usage: { modelCalls: 1, ...value.usage } };
     }, signal);
-    return { ...decision, latencyMs: performance.now() - started,
+    return { ...decision, temporaryGoal, latencyMs: performance.now() - started,
       selectedExperience: prepared.experience.slice(0, decision.experienceUsed ?? 0),
       preparation: { revision: this.revision.executor, historyIndices: prepared.historyIndices,
         experienceIndices: prepared.experienceIndices.slice(0, decision.experienceUsed ?? 0), features: prepared.features,

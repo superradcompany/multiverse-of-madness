@@ -1,4 +1,5 @@
 import { decisionLeadTicks, decisionStateIsCurrent, decisionFactChanges } from './doom-decision-freshness.ts';
+import { advanceDoomTemporaryGoal, decodeDoomTemporaryGoal } from './doom-temporary-goal.ts';
 import { decisionOptionsView } from './decision-options.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { failedPlanFeedback, previousPlanFeedback, type PreviousPlanFeedback } from './plan-feedback.ts';
@@ -6,7 +7,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { scoreDoomOutcome, type DoomOutcomeWeights } from './doom-outcome.ts';
 import { doomLearningProvenance, verifyDoomLearning, type DoomLearningBinding, type SavedDoomLearning } from './doom-learning.ts';
 import { contentRevision } from '@multiverse/gameplay-harness/node';
-import type { LearningRevision, PolicyPatch, VersionRef } from '@multiverse/gameplay-harness';
+import type { GoalFrame, LearningRevision, PolicyPatch, VersionRef } from '@multiverse/gameplay-harness';
 import { doomPolicy, learningDoomPolicy, cappedLearningDoomPolicy, restoreDoomPolicy, type DoomPolicy, type DoomPolicyRecord } from './doom-policy.ts';
 import { vmResourceStateSchema, type VmResourceState, type VmOverview } from '../../contracts/src/vm.ts';
 import { assertVmBudget, resourceTotals, type VmSettingsStore } from './vm-settings.ts';
@@ -57,7 +58,8 @@ const newRecovery = (): RecoveryState => ({ policy: { enabled: false, maxRetries
 const newAttempts = () => ({ ticks: 0, kills: 0, deaths: 0, rejectedBatches: 0, retries: 0, rollbacks: 0, planFailures: 0 });
 export interface SessionCheckpoint {
   policies?: DoomPolicyRecord[];
-  version: 1 | 2;
+  version: 1 | 2 | 3;
+  goalScopeId?: string;
   learning?: SavedDoomLearning;
   recovery?: RecoveryState;
   attempts?: Omit<ReturnType<typeof newAttempts>, 'planFailures'> & { planFailures?: number };
@@ -76,12 +78,14 @@ export interface SessionCheckpoint {
 export interface SessionContinuation {
   state: GameState; history: GameState[]; stats?: TimelineStats; navigation?: NavigationMemory; pickups?: PickupMemory; plan?: PlanExecution;
   experience: Experience[];
+  temporaryGoal?: WorldView['temporaryGoal'];
+  goalScopeId?: string;
 }
 export function sessionContinuation(saved: SessionCheckpoint): SessionContinuation {
   const world = saved.worlds.find(world => world.view.id === saved.view.mainId);
   if (!world) throw new Error('Continuation requires the saved main world');
   return JSON.parse(JSON.stringify({ state: world.view.state, history: world.history, stats: world.stats,
-    navigation: world.navigation, pickups: world.pickups, plan: world.plan, experience: saved.experience?.records ?? [] })) as SessionContinuation;
+    navigation: world.navigation, pickups: world.pickups, plan: world.plan, temporaryGoal: world.view.temporaryGoal, goalScopeId: saved.goalScopeId, experience: saved.experience?.records ?? [] })) as SessionContinuation;
 }
 export interface SessionInitialContext { overrides?: PolicyPatch<DoomPolicy>; skills?: AiSkill[]; objective?: string }
 export function outcomeScore(before: GameState, after: GameState, priority: Priority, novelCells = 0, shaping?: Readonly<DoomOutcomeWeights>): number {
@@ -89,6 +93,7 @@ export function outcomeScore(before: GameState, after: GameState, priority: Prio
 }
 
 export class Session extends EventEmitter {
+  private goalScopeId: string = randomUUID();
   private revisions?: DoomLearningBinding;
   private readonly decisionLatency = new Map<string, number>();
   private readonly nextDecisions = new Map<string, DecisionPrefetch<DecisionQuestion, DecisionAnswer>>();
@@ -326,6 +331,12 @@ export class Session extends EventEmitter {
       const world = this.world(runtime.id), seed = structuredClone(continuation);
       if (!isDeepStrictEqual(seed.state, world.view.state)) throw new Error('Continuation does not match the restored game state');
       if (seed.plan?.status === 'running') throw new Error('Continuation must start at a completed plan boundary');
+      if (seed.temporaryGoal) {
+        const goal = decodeDoomTemporaryGoal(seed.temporaryGoal);
+        if (!seed.goalScopeId || goal.record.created.scope.id !== seed.goalScopeId) throw new Error('Continuation goal belongs to another run');
+        this.goalScopeId = seed.goalScopeId; world.view.temporaryGoal = goal;
+        this.advanceGoal(world);
+      }
       world.history = seed.history; world.stats = seed.stats ?? world.stats;
       world.navigation = seed.navigation; world.pickups = seed.pickups; world.plan = seed.plan;
       this.memory.records = seed.experience.slice(-this.memory.capacity);
@@ -336,7 +347,8 @@ export class Session extends EventEmitter {
   }
   setPersistence(save: (checkpoint: SessionCheckpoint) => Promise<void>) { this.save = save; }
   checkpoint(): SessionCheckpoint {
-    return structuredClone({ version: this.revisions ? 2 : 1, ...(this.revisions ? { learning: { binding: this.revisions.identity, overrides: this.userOverrides } } : {}), policies: [...this.policies.values()], recovery: this.recovery, attempts: this.attempts, recentPlanFailures: this.recentPlanFailures, experience: { enabled: this.memoryEnabled, records: this.memory.records, capacity: this.memory.capacity, contextLimit: this.memoryPerDecision }, view: this.snapshot(), experiments: this.experiments, baseline: this.baseline, priority: this.priority, cleanup: this.cleanup, recordingResetTo: this.recordingResetTo, pendingFork: this.pendingFork,
+    const hasGoals = [...this.worlds.values()].some(world => world.view.temporaryGoal) || this.recovery.points.some(point => point.world.temporaryGoal);
+    return structuredClone({ version: hasGoals ? 3 : this.revisions ? 2 : 1, ...(hasGoals ? { goalScopeId: this.goalScopeId } : {}), ...(this.revisions ? { learning: { binding: this.revisions.identity, overrides: this.userOverrides } } : {}), policies: [...this.policies.values()], recovery: this.recovery, attempts: this.attempts, recentPlanFailures: this.recentPlanFailures, experience: { enabled: this.memoryEnabled, records: this.memory.records, capacity: this.memory.capacity, contextLimit: this.memoryPerDecision }, view: this.snapshot(), experiments: this.experiments, baseline: this.baseline, priority: this.priority, cleanup: this.cleanup, recordingResetTo: this.recordingResetTo, pendingFork: this.pendingFork,
       worlds: [...this.worlds.values()].map(w => ({ lastJevDecision: w.lastJevDecision, view: w.view, identity: w.runtime?.identity, frame: w.frame.toString('base64'), history: w.history, stats: w.stats, navigation: w.navigation, pickups: w.pickups, plan: w.plan })) });
   }
   private async persist() { await this.save?.(this.checkpoint()); }
@@ -344,14 +356,23 @@ export class Session extends EventEmitter {
     recoverPending?: (id: string) => Promise<WorldRuntime | undefined>,
     destroyPending?: (id: string, identity: string) => Promise<void>) {
     if (this.worlds.size) throw new Error('Session already initialized');
-    if (saved.version === 2) {
+    if (saved.version === 2 || (saved.version === 3 && saved.learning)) {
       if (!saved.learning || !this.revisions || !isDeepStrictEqual(saved.learning.binding, this.revisions.identity)) throw new Error('Supervised Doom session requires its original learning binding');
       this.userOverrides = structuredClone(saved.learning.overrides);
       learningDoomPolicy(this.revisions.current().artifact, this.userOverrides);
-    } else if (saved.version !== 1 || saved.learning || this.revisions) throw new Error('Restore the legacy Doom session before explicitly adopting a learning binding');
+    } else if ((saved.version !== 1 && saved.version !== 3) || saved.learning || this.revisions) throw new Error('Restore the legacy Doom session before explicitly adopting a learning binding');
+    const savedGoals = [...saved.worlds.map(world => world.view.temporaryGoal), ...(saved.recovery?.points ?? []).map(point => point.world.temporaryGoal), ...saved.view.worlds.map(world => world.temporaryGoal)].filter(goal => goal !== undefined);
+    if (saved.version === 3) {
+      if (typeof saved.goalScopeId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(saved.goalScopeId)) throw new Error('Invalid saved temporary-goal scope');
+      for (const goal of savedGoals) {
+        const decoded = decodeDoomTemporaryGoal(goal);
+        if (decoded.record.created.scope.id !== saved.goalScopeId) throw new Error('Saved goal belongs to another run');
+      }
+      this.goalScopeId = saved.goalScopeId;
+    } else if (savedGoals.length || saved.goalScopeId) throw new Error('Temporary goals require session format 3');
     const learningReferences = [saved.pendingFork?.learning, saved.view.decision?.learning, ...saved.worlds.map(world => world.view.learning), ...(saved.recovery?.points ?? []).map(point => point.world.learning)];
     for (const reference of learningReferences) if (reference) verifyDoomLearning(this.revisions, reference);
-    if (saved.version === 2) {
+    if (saved.version === 2 || (saved.version === 3 && saved.learning)) {
       const active = this.revisions!.current().activation;
       const batchReferences = [...saved.experiments.map(item => saved.worlds.find(world => world.view.id === item.id)?.view.learning),
         ...(saved.pendingFork ? [saved.pendingFork.learning] : [])];
@@ -410,6 +431,7 @@ export class Session extends EventEmitter {
       view.status = view.role === 'archived' || !view.state.alive ? 'ended' : 'paused';
       this.lifecycle.register({ lastJevDecision: structuredClone(record.lastJevDecision), view, runtime, frame: runtime ? await runtime.frame() : Buffer.from(record.frame, 'base64'), history: record.history, stats, navigation: structuredClone(record.navigation), pickups: observePickups(view.state, record.pickups), plan: structuredClone(record.plan) });
     }
+    for (const world of this.worlds.values()) this.advanceGoal(world);
     // Do not replay a possibly completed input after a crash. Compare actual engine ticks.
     for (const experiment of this.experiments) {
       const state = this.world(experiment.id).view.state;
@@ -530,6 +552,7 @@ export class Session extends EventEmitter {
     this.attempts.deaths += Number(before.alive && !state.alive);
     world.pickups = observePickups(state, world.pickups);
     world.view.state = state;
+    this.advanceGoal(world);
     if (world.view.role === 'experiment' && this.baseline) world.view.trial = {
       elapsed: state.tick - this.baseline.tick, total: world.view.trial?.total ?? this.options.horizon,
       healthChange: state.health - this.baseline.health, kills: (world.view.trial?.kills ?? 0) + world.stats.kills - killsBefore,
@@ -593,10 +616,14 @@ export class Session extends EventEmitter {
   private cleanCheckpoints() { return this.checkpointRecovery.collect(); }
   private async restorePoint(pointId: string) {
     await this.checkpointRecovery.restore(pointId);
+    this.advanceGoal(this.world(this.mainId));
+    await this.persist();
     this.announceRollback();
   }
   private async installRollback(runtime: WorldRuntime, pointId: string) {
     await this.checkpointRecovery.recover(runtime, pointId);
+    this.advanceGoal(this.world(this.mainId));
+    await this.persist();
     this.announceRollback();
   }
   private async attachRollback(runtime: WorldRuntime, point: RecoveryPoint): Promise<World> {
@@ -752,6 +779,7 @@ export class Session extends EventEmitter {
     for (const world of this.worlds.values()) if (world.plan?.status === 'running') {
       stopPlan(world.plan, 'replan', 'AI guide updated'); world.view.plan = planView(world.plan);
     }
+    for (const world of this.worlds.values()) this.advanceGoal(world);
     this.say(this.mainId, `New objective: ${this.view.objective}`);
   }
   private controlPolicy(): DoomPolicy {
@@ -843,6 +871,22 @@ export class Session extends EventEmitter {
     return this.revisions ? world.view.role === 'experiment' && world.view.learning
       ? { activation: world.view.learning.activation, artifact: this.revisions.resolve(world.view.learning.activation) } : this.revisions.current() : undefined;
   }
+  private goalFrame(world: World): GoalFrame {
+    const state = world.view.state;
+    return { scope: { id: this.goalScopeId, version: `E${state.episode}M${state.map}` },
+      context: contentRevision('doom-goal-context', { objective: this.view.pendingObjective ?? this.view.objective, skills: activeSkills(this.view.skills ?? []) }),
+      source: contentRevision('doom-goal-strategy', this.pinnedLearning(world)?.activation ?? { builtin: 1 }),
+      clock: { unit: 'doom-ticks', value: state.tick } };
+  }
+  private advanceGoal(world: World): void {
+    const goal = world.view.temporaryGoal;
+    if (!goal || goal.record.status !== 'active') return;
+    world.view.temporaryGoal = advanceDoomTemporaryGoal(goal, this.goalFrame(world), world.view.state);
+    if (world.view.temporaryGoal.record.status !== 'active' && world.plan?.status === 'running') {
+      stopPlan(world.plan, 'replan', `Temporary goal ${world.view.temporaryGoal.record.status}`);
+      world.view.plan = planView(world.plan);
+    }
+  }
   private decisionKey(world: World, actionTicks: number, planTicks: number): string {
     return JSON.stringify({ objective: this.view.objective, pending: this.view.pendingObjective,
       skills: this.view.skillsRevision ?? 0, controls: this.controlPolicy(), learning: this.pinnedLearning(world)?.activation,
@@ -850,11 +894,13 @@ export class Session extends EventEmitter {
   }
   private captureQuestion(world: World, actionTicks: number, planTicks: number, ahead = false): DecisionQuestion {
     this.applyGuide();
+    this.advanceGoal(world);
     const pinned = this.pinnedLearning(world);
     const policy = this.capturePolicy(actionTicks, planTicks, pinned?.artifact);
     const state = structuredClone(world.view.state), experience = this.experiences(state);
     const run = world.plan;
     const context: DecisionContext = structuredClone({
+      temporaryGoal: { frame: this.goalFrame(world), current: world.view.temporaryGoal },
       experiencePool: policy.policy.values.memory.enabled ? this.memory.records : [],
       previousPlan: previousPlanFeedback(run, state), policy: policy.policy.values,
       skills: this.view.skills ?? [], previousAction: world.view.currentAction,
@@ -903,7 +949,9 @@ export class Session extends EventEmitter {
       this.emit('decision-prefetch', { worldId: world.view.id, instructionsCurrent, stateCurrent,
         ageTicks: world.view.state.tick - question.state.tick, displacement: Math.hypot(world.view.state.x - question.state.x, world.view.state.y - question.state.y),
         planStatus: world.plan?.status, factChanges: decisionFactChanges(question.state, world.view.state), changed: Object.keys(question.state).filter(key => !isDeepStrictEqual(question.state[key as keyof GameState], world.view.state[key as keyof GameState])) });
-      return instructionsCurrent && stateCurrent;
+      const goal = answer?.decision.temporaryGoal ?? question.context.temporaryGoal?.current;
+      const goalCurrent = !goal || goal.record.status !== 'active' || advanceDoomTemporaryGoal(goal, this.goalFrame(world), world.view.state).record.status === 'active';
+      return instructionsCurrent && stateCurrent && goalCurrent;
     }, signal);
     if (slot) this.nextDecisions.delete(world.view.id);
     // Only absolute-target conditional plans may be reused after player movement.
@@ -919,6 +967,10 @@ export class Session extends EventEmitter {
       result = fresh.result;
     }
     result.decision = { ...result.decision, prefetched, waitMs: performance.now() - started };
+    if (result.decision.temporaryGoal) {
+      world.view.temporaryGoal = advanceDoomTemporaryGoal(result.decision.temporaryGoal, this.goalFrame(world), world.view.state);
+      await this.persist();
+    }
     world.lastJevDecision = structuredClone(result.decision.jevTrace);
     this.decisionLatency.set(world.view.id, result.decision.latencyMs);
     world.view.policyRevision = result.policy.revision; world.view.learning = result.learning;
@@ -980,7 +1032,7 @@ export class Session extends EventEmitter {
       let state: GameState, frame: Buffer;
       try { state = await runtime.state(); frame = await runtime.frame(); }
       catch (error) { await runtime.destroy(); throw error; }
-      const old = { worlds: this.worlds, mainId: this.mainId, view: this.view, memory: this.memory, memoryUsed: this.memoryUsed,
+      const old = { goalScopeId: this.goalScopeId, worlds: this.worlds, mainId: this.mainId, view: this.view, memory: this.memory, memoryUsed: this.memoryUsed,
         memoryEvidence: this.memoryEvidence, experiments: this.experiments, baseline: this.baseline,
         priority: this.priority, sequence: this.sequence, cleanup: this.cleanup, recovery: this.recovery, attempts: this.attempts, recentPlanFailures: this.recentPlanFailures };
       this.worlds = new Map([[runtime.id, { runtime, frame, history: [state], stats: initialStats(state), view: {
@@ -988,6 +1040,7 @@ export class Session extends EventEmitter {
         controller: 'ai', frameVersion: 1, state,
       } }]]);
       this.mainId = runtime.id;
+      this.goalScopeId = randomUUID();
       this.view = { worlds: [], running: false, busy: true, stage: 'ready',
         skills: old.view.skills, skillsRevision: old.view.skillsRevision, forkThreshold: old.view.forkThreshold, maxFutures: old.view.maxFutures, planningMode: old.view.planningMode, winnerDelaySeconds: old.view.winnerDelaySeconds, decisionIntervalTicks: old.view.decisionIntervalTicks, decisionIntervalMode: old.view.decisionIntervalMode, trialDurationTicks: old.view.trialDurationTicks, objective: old.view.pendingObjective ?? old.view.objective, commentary: [] };
       this.recovery = { ...newRecovery(), policy: old.recovery.policy, cleanup: [...old.recovery.cleanup, ...old.recovery.points.map(p => p.reference)] };
@@ -1205,6 +1258,7 @@ export class Session extends EventEmitter {
     const baseline = intent.baseline ?? this.baseline ?? source.view.state;
     if (!isDeepStrictEqual(world.view.state, baseline)) throw new Error(`Fork child ${runtime.id} does not match the captured game state`);
     world.lastJevDecision = structuredClone(source.lastJevDecision);
+    world.view.temporaryGoal = structuredClone(source.view.temporaryGoal);
     return world;
   }
   private stageFork(children: World[], source: World, intent: DoomFork): () => void {

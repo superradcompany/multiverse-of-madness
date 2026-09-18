@@ -4,6 +4,7 @@ import type { GameState } from '../../contracts/src/game.ts';
 import type { GamePlan } from './doom-plans.ts';
 import type { Experience } from './experience.ts';
 import { cell } from './run-stats.ts';
+import { doomGoalProposalSchema, type DoomGoalProposal } from './doom-temporary-goal.ts';
 
 const coordinate = z.number().finite().min(-1048576).max(1048576);
 const target = z.strictObject({ x: coordinate, y: coordinate, z: coordinate, kind: z.enum(['point', 'enemy', 'pickup']), engineType: z.number().int().nonnegative().optional() });
@@ -14,16 +15,19 @@ const plan = z.strictObject({
     label: z.string().trim().min(1).max(120), target, within: z.number().min(1).max(256).optional(), maxTicks: z.number().int().min(1).max(2100) })).min(1).max(12),
 });
 const indices = z.array(z.number().int().nonnegative());
-export const doomPreparationSchema = z.strictObject({
+const legacyPreparationSchema = z.strictObject({
   abi: z.literal('doom-preparation/1'),
   plans: z.array(plan).min(1).max(10).optional(),
   historyIndices: indices.max(10), experienceIndices: indices.max(8),
   features: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/), z.union([z.number().finite(), z.boolean(), z.string().max(160)])),
 });
+export const doomPreparationSchema = z.discriminatedUnion('abi', [legacyPreparationSchema,
+  legacyPreparationSchema.extend({ abi: z.literal('doom-preparation/2'), temporaryGoal: doomGoalProposalSchema.optional() })]);
 export interface DoomPreparationPool {
   state: GameState; history: GameState[]; experience: Experience[]; planTicks?: number; experienceLimit: number; visited?: string[];
 }
 export interface PreparedDoomContext {
+  temporaryGoal?: DoomGoalProposal;
   historyIndices: number[]; experienceIndices: number[];
   history: GameState[]; experience: Experience[]; plans?: GamePlan[];
   features: Record<string, string | number | boolean>;
@@ -52,5 +56,6 @@ export function prepareDoomContext(value: unknown, pool: DoomPreparationPool): P
     }
     return { ...item, novelty: pool.visited ? Number(!pool.visited.includes(cell({ ...pool.state, ...item.steps.at(-1)!.target }))) : undefined };
   });
-  return { historyIndices: parsed.historyIndices, experienceIndices: parsed.experienceIndices, history, experience, plans, features: parsed.features };
+  return { ...(parsed.abi === 'doom-preparation/2' && parsed.temporaryGoal ? { temporaryGoal: parsed.temporaryGoal } : {}),
+    historyIndices: parsed.historyIndices, experienceIndices: parsed.experienceIndices, history, experience, plans, features: parsed.features };
 }

@@ -481,3 +481,18 @@ whole-future promotion, selected replay ancestry and rollback. The default model
 an explicit deterministic fixture. Add `--model jev` in a new directory for real
 TypeSafe decisions with a durable API-call limit. See [the chess guide](../chess/README.md)
 for continuation, guidance, configuration and runtime distinctions.
+
+### Temporary goals
+
+A supervisor-generated planner may return `doom-preparation/2` with a bounded
+`temporaryGoal`. Jev receives active goal guidance alongside the unchanged user
+objective. The host checks completion against engine state; a goal ends on death,
+expiry, a changed objective/strategy or a different map. Missing key observations
+are reported explicitly. Reusing a proposal key does not renew its deadline.
+Goals appear in Available plans and follow forked worlds, recordings and saved
+checkpoints. This adds no separate supervisor call on each turn.
+
+Sessions containing goals use format 3. This build still reads formats 1 and 2;
+older builds reject format 3, so keep the upgraded build when reopening such a
+session. The live demo is not upgraded automatically by a source checkout.
+These lifecycle checks do not establish that a proposed goal improves gameplay.

@@ -14,7 +14,7 @@ import { retainDoomLearningBuild, type DoomLearningBuild } from './doom-learning
 
 /** Explicit offline handoff. Caller owns the data lease and publishes the returned checkpoint last. */
 export async function prepareDoomBuildUpgrade(root: string, saved: SessionCheckpoint, build: DoomLearningBuild): Promise<SessionCheckpoint> {
-  if (!saved.learning || saved.version !== 2) throw new Error('Build upgrade requires a supervised session');
+  if (!saved.learning || (saved.version !== 2 && saved.version !== 3)) throw new Error('Build upgrade requires a supervised session');
   if (saved.view.running || saved.experiments.length || saved.pendingFork || saved.worlds.some(w => w.view.role !== 'archived'
     && (w.plan?.status === 'running' || w.view.controller === 'human'))) throw new Error('Pause at a resolved AI decision boundary before upgrading');
   const source = await doomLearningDirectory(root, saved.learning.binding);

@@ -136,8 +136,9 @@ gameplay: establish strength with broader held-out positions and longer runs.
 
 `createScopedGoal`, `advanceScopedGoal` and `decodeScopedGoal` provide a separate,
 serializable lifecycle for temporary advisory goals. They never overwrite the
-user's objective or select/execute actions. This primitive is not yet wired into
-the Doom/chess planners, session checkpoints or viewers.
+user's objective or select/execute actions. Doom integrates this primitive with
+its preparation planner, session checkpoints and viewer. Chess integration remains
+separate adapter work.
 
 The host supplies the logical run/environment scope, user-context identity,
 strategy activation identity, simulation clock and target schema. A proposal

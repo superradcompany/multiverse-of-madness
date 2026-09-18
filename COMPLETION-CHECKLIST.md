@@ -107,9 +107,16 @@ persists branch-local advisory goals with host-owned scope, user-context and
 strategy identities, evidence references, target schema and simulation-time
 expiry. It rejects stale scope/clock use and keeps terminal outcomes terminal.
 Core tests cover restart, fork independence, completion/failure, clock rewind,
-deadline boundaries and malformed proposals. Doom/chess planner generation,
-checkpoint integration and UI presentation remain unfinished; this does not
-establish automatic recovery from a stuck game or replace the primary objective.
+deadline boundaries and malformed proposals. Doom now accepts optional goals from
+preparation output v2, passes active guidance to Jev without replacing the user
+guide, persists it in session format 3, and displays it beside available plans.
+Repeated proposal keys retain their original deadline and terminal outcome.
+Prefetch rejects results whose goals ended before consumption. Scripted real-VM
+qualification branched two children, reconnected all worlds with unchanged goal
+identity/deadlines, preserved the source and removed all three owned VMs. Run it
+with `node --import tsx scripts/qualification/doom-goals.ts` after setup.
+Chess integration and autonomous goal-quality qualification remain unfinished;
+this does not establish automatic recovery from a stuck game.
 
 Doom still has hand-written seed strategies. Generated planner `19db5d37-f130-4285-85dc-a6fe7c68f8a3`
 qualified on three opening cases (mean gain 45.67) and activated automatically.

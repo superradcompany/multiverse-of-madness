@@ -15,7 +15,7 @@ export async function doomPreparationInput(revision: LearningRevision<DoomPolicy
   const policy = context.policy ?? revision.policy;
   const pool = policy.memory.enabled ? context.experiencePool ?? experience : [];
   const map = await geometryFor(state, true, true);
-  const input = { abi: 'doom-preparation/1', planningAhead: context.planningAhead, previousPlan: context.previousPlan, state, objective, history, experience: pool,
+  const input = { abi: 'doom-preparation/1', supportedOutputAbis: ['doom-preparation/1', 'doom-preparation/2'], temporaryGoal: context.temporaryGoal, planningAhead: context.planningAhead, previousPlan: context.previousPlan, state, objective, history, experience: pool,
     experienceLimit: policy.memory.enabled ? policy.memory.perDecision : 0, planTicks: context.planTicks,
     actionTicks, stats: context.stats ?? decisionStatistics(state), userSkills: activeSkills(context.skills ?? []), visited: context.visited,
     feedback: feedbackState(state, objective, history, map, actionTicks, experience, context.previousAction),

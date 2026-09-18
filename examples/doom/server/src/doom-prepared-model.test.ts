@@ -10,6 +10,7 @@ import { doomPreparationInput } from './doom-preparation-input.ts';
 import { prepareDoomContext } from './doom-preparation.ts';
 import { DoomPreparedModel } from './doom-prepared-model.ts';
 import { doomLearningArtifact } from './doom-learning-models.ts';
+import type { DoomGoalProposal } from './doom-temporary-goal.ts';
 import { Session } from './session.ts';
 import { decision, initial } from '../test-support/fixture-runtime.ts';
 import type { Experience } from './experience.ts';
@@ -20,10 +21,10 @@ async function fixture() {
   const policy = new Session({ decide: async () => decision }).learningPolicy(); policy.memory.enabled = true; policy.memory.perDecision = 1;
   const revision = doomLearningArtifact({ policy, prompts: {}, skills: [], adapter: { id: 'test', version: '1' }, executor: source.revision, model: { id: 'prepared-doom-jev', version: 'jev-latest' } });
   const preparations: any[] = [], requests: any[] = [], records: unknown[] = [];
-  const hooks: { invalid?: boolean; abort?: () => void } = {};
+  const hooks: { invalid?: boolean; abort?: () => void; goal?: DoomGoalProposal } = {};
   const executor: ExecutableProvider = { version: { id: 'test', version: '1' }, execute: async (artifact, input, limits) => {
     const packet = input as any; preparations.push(packet); hooks.abort?.();
-    return { value: { abi: 'doom-preparation/1', historyIndices: [], experienceIndices: hooks.invalid ? [99] : packet.experienceLimit ? [1] : [], features: { avoidRepeatedHeading: true },
+    return { value: { abi: hooks.goal ? 'doom-preparation/2' : 'doom-preparation/1', ...(hooks.goal ? { temporaryGoal: hooks.goal } : {}), historyIndices: [], experienceIndices: hooks.invalid ? [99] : packet.experienceLimit ? [1] : [], features: { avoidRepeatedHeading: true },
       ...(packet.planTicks ? { plans: [{ id: 'learned_opening', label: 'Test a generated opening', steps: [{ kind: 'move', label: 'Follow new waypoint', target: { kind: 'point', x: initial.x + 96, y: initial.y + 32, z: initial.z }, maxTicks: 35 }] }] } : {}) },
       receipt: { revision: artifact.revision, provider: executor.version, limits, runtime: { id: 'fixture', identity: 'fixture', image: 'fixture' }, status: 'complete', startedAt: 0, elapsedMs: 3, stdoutBytes: 100, stderrBytes: 0 } };
   } };
@@ -103,5 +104,27 @@ test('local failure feedback survives preparation even when the program discards
     assert.deepEqual(f.requests[0].state.previousPlan, previousPlan);
     assert.deepEqual(result.evidence?.previousPlan, previousPlan);
     assert.equal(result.experienceUsed, 0);
+  } finally { await f.cleanup(); }
+});
+
+test('planner v2 sends a bounded advisory goal to Jev without replacing the user guide or adding calls', async () => {
+  const f = await fixture();
+  try {
+    f.policy.memory.enabled = false;
+    f.hooks.goal = { key: 'opening', instruction: 'Reach the opening', reason: 'Seek a route out', evidence: ['current-state'], duration: 35,
+      target: { kind: 'position', x: 100, y: 0, z: 0, within: 8 } };
+    const context = { frame: { scope: { id: 'run', version: 'E1M1' }, context: { id: 'guide', version: '1' }, source: { id: 'strategy', version: '1' }, clock: { unit: 'doom-ticks', value: initial.tick } } };
+    const result = await f.model.decide(initial, 'Conserve ammunition', [], new AbortController().signal, [], 35,
+      { policy: f.policy, temporaryGoal: context });
+    assert.equal(f.requests[0].state.objective, 'Conserve ammunition');
+    assert.equal(f.requests[0].state.temporaryGoal.instruction, 'Reach the opening');
+    assert.equal(f.requests[0].state.temporaryGoal.remainingTicks, 35);
+    assert.equal(f.ledger.used('modelCalls'), 1);
+    const after = { ...initial, tick: initial.tick + 35 };
+    const expired = await f.model.decide(after, 'Conserve ammunition', [], new AbortController().signal, [], 35,
+      { policy: f.policy, temporaryGoal: { current: result.temporaryGoal, frame: { ...context.frame, clock: { ...context.frame.clock, value: after.tick } } } });
+    assert.equal(expired.temporaryGoal!.record.status, 'expired');
+    assert.equal(f.requests[1].state.temporaryGoal, undefined);
+    assert.equal(expired.temporaryGoal!.record.expiresAt, result.temporaryGoal!.record.expiresAt);
   } finally { await f.cleanup(); }
 });

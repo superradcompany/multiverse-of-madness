@@ -1,6 +1,7 @@
 import type { ActivationRef, VersionRef } from '@multiverse/gameplay-harness';
 import type { GameState } from './game.ts';
 import type { AiSkill } from './skills.ts';
+import type { DoomTemporaryGoal } from './temporary-goal.ts';
 export interface PlanView { label: string; steps: string[]; step: number; status: 'running' | 'complete' | 'replan' | 'horizon'; reason?: string }
 export interface LearningProvenance { activation: ActivationRef; adapter: VersionRef; executor: VersionRef; model: VersionRef }
 export interface DecisionOptionsView {
@@ -9,6 +10,7 @@ export interface DecisionOptionsView {
   changes?: { tick: number; added: string[]; removed: string[]; updated: string[] };
 }
 export interface WorldView {
+  temporaryGoal?: DoomTemporaryGoal;
   decisionOptions?: DecisionOptionsView;
   learning?: LearningProvenance;
   policyRevision?: VersionRef;
