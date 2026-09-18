@@ -132,6 +132,42 @@ gameplay: establish strength with broader held-out positions and longer runs.
 
 ## Qualify your integration
 
+### Temporary goals
+
+`createScopedGoal`, `advanceScopedGoal` and `decodeScopedGoal` provide a separate,
+serializable lifecycle for temporary advisory goals. They never overwrite the
+user's objective or select/execute actions. This primitive is not yet wired into
+the Doom/chess planners, session checkpoints or viewers.
+
+The host supplies the logical run/environment scope, user-context identity,
+strategy activation identity, simulation clock and target schema. A proposal
+supplies only instructions, rationale, evidence references, a bounded duration
+and an adapter-specific target. Resolve those references against real retained
+observations and validate targets against game mechanics. Reject stale proposals
+at the same revision boundary used for strategy activation; do not stamp an old
+proposal with new context identities to make it appear current.
+
+Persist the returned goal with its world before using it. At each decision
+boundary, advance it against fresh host observations and persist the result.
+Only an `active` result may guide the next decision. The host assessment callback
+reports measured completion or failure; the proposing model cannot grade itself.
+Expiry is exclusive: reaching the deadline expires the goal before assessment.
+Repeated checks and reopening a saved record never extend its deadline.
+
+Changing run/environment, objective/constraints, activation or clock units
+invalidates the goal. Moving the clock backwards also invalidates it. Include
+the activation epoch in `source` so rolling back to an older strategy still
+counts as a change. Exact future worlds may inherit the same logical scope;
+clone their records so completion in one future does not finish its siblings.
+After completion, failure, expiry or invalidation, the record remains terminal.
+Creating a replacement requires a new host-issued identity and evidence check.
+
+Keep ended records as diagnostic history with an explicit retention policy.
+The primitive does not migrate a game's existing session format, maintain that
+history, set a recovery policy or guarantee that a temporary goal improves play.
+
+### Runtime and game-quality checks
+
 Before claiming exact branching, verify two restored copies against complete
 engine state and history, exercise distinct inputs, promote the full selected
 world and reconnect it. Test cancellation after dispatch, interrupted publication,

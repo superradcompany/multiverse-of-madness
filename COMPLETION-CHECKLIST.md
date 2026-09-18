@@ -102,6 +102,15 @@ the harness's clean external-package consumer. Evidence:
 - [ ] Make temporary subgoals explicit, persistent, scoped and expiring, without
   overwriting the user's objective. Report missing observations/controls as gaps.
 
+Temporary-goal foundation (2026-09-18): the portable harness now validates and
+persists branch-local advisory goals with host-owned scope, user-context and
+strategy identities, evidence references, target schema and simulation-time
+expiry. It rejects stale scope/clock use and keeps terminal outcomes terminal.
+Core tests cover restart, fork independence, completion/failure, clock rewind,
+deadline boundaries and malformed proposals. Doom/chess planner generation,
+checkpoint integration and UI presentation remain unfinished; this does not
+establish automatic recovery from a stuck game or replace the primary objective.
+
 Doom still has hand-written seed strategies. Generated planner `19db5d37-f130-4285-85dc-a6fe7c68f8a3`
 qualified on three opening cases (mean gain 45.67) and activated automatically.
 That establishes a working replacement path, not robust gameplay or recovery

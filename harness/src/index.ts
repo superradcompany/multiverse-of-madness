@@ -21,3 +21,4 @@ export { executeLearningStage, type LearningStageOptions, type LearningStageReco
 export { AutonomousLearning, type AutonomousLearningPorts, type AutonomousLearningState, type AutonomousCycle, type LearningObservation, type AutonomousJob } from './autonomous-learning.ts';
 export { DecisionPrefetch } from './decision-prefetch.ts';
 export { validateGameDescription, type GameDescription, type GameFieldDescription } from './game-description.ts';
+export { createScopedGoal, decodeScopedGoal, advanceScopedGoal, type GoalFrame, type GoalDraft, type GoalStatus, type ScopedGoal, type ScopedGoalRules, type GoalAssessment } from './scoped-goal.ts';
