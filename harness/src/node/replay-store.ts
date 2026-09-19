@@ -148,15 +148,17 @@ export class ReplayStore<World extends ReplayWorld> {
     return [...this.worlds.values()].filter(e => !e.index.selected)
       .reduce((total, e) => total + e.index.segments.reduce((sum, segment) => sum + segment.bytes, 0), 0);
   }
-  /** Selected ancestry is durable run footage, exempt from automatic eviction. */
+  /** Retain and publish selected ancestry, including buffered frames, before acknowledging selection/checkpointing. */
   async retainPath(id: string) {
     const task = this.chain.then(async () => {
       const seen = new Set<string>();
+      const retained: Entry<World>[] = [];
       let next: string | undefined = id;
       while (next && !seen.has(next)) {
         seen.add(next);
         const entry = this.worlds.get(next);
         if (!entry) break;
+        retained.push(entry);
         if (!entry.index.selected) {
           const committed = entry.index.segments.reduce((sum, segment) => sum + segment.count, 0);
           await mkdir(this.directory(next), { recursive: true });
@@ -165,6 +167,11 @@ export class ReplayStore<World extends ReplayWorld> {
         }
         next = entry.index.parentId;
       }
+      // Every ancestor must be selected before a segment flush invokes GC.
+      // Repeated retention also flushes new footage from an already selected
+      // world. A write failure rejects the caller's publication barrier; pending
+      // frames remain available for retry, and committed prefixes stay intact.
+      for (const entry of retained.reverse()) await this.flushEntry(entry);
     });
     this.chain = task.catch(() => {});
     await task;

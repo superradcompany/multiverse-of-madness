@@ -309,6 +309,18 @@ tests and the production build passed. No demo or VM was started.
 
 ## 7. Complete the viewer and replay experience
 
+Selected replay publication (2026-09-19): `retainPath` now publishes buffered
+frames from every known selected ancestor before acknowledging promotion or a
+checkpoint. Previously the retained flags could reach disk while the final frames
+remained memory-only. Regression tests reproduced that loss, then verified a full
+reopen without an extra flush, repeated retention after further play, preservation
+under age/count/byte collection and retry after a blocked segment write. Existing
+Doom/chess lifecycle ports already await this barrier. The disk format is
+unchanged; this does not claim power-loss durability or restore earlier missing
+footage. Type checking, 129 harness tests, 412 application tests and the production
+build passed. Live rollout and broader recording/GC qualification remain
+outstanding; the demo and VMs remain stopped.
+
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,
   live play vs replay, current control owner and supervisor status.
 - [ ] Verify supervision works without manual proposal/test/activation controls and

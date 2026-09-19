@@ -102,6 +102,15 @@ Currently consumed by the Doom application:
   ancestry. The historical replay index uses `ticks`/`startTick` as opaque integer
   cursor fields; the adapter supplies their meaning and segment size.
 
+Await `ReplayStore.retainPath(id)` before publishing a selected world or checkpoint.
+It marks the known ancestry as retained, then publishes its buffered frames,
+including new frames on an already selected world. Publication failures reject
+the call and leave pending frames available for retry. Ordinary recording stays
+buffered; the retention barrier flushes only the selected ancestry. The on-disk
+format is unchanged. This protects acknowledged selection/checkpoint footage
+across process restart, not power loss; it cannot restore previously missing
+history or footage discarded after a recording error.
+
 `runTrials` uses seconds or turns, never a fixed game tick rate. Adapters must
 honor cancellation before issuing another input and settle already-dispatched
 work before returning. A failed sibling cancels the group; all work is joined
