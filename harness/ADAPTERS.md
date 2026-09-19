@@ -32,9 +32,13 @@ their TypeScript configuration when using the Node entrypoint.
 temporary directory, installs its locked dependencies, runs the core checks, then
 packs and installs the tarball in a second directory. That consumer compiles with
 declaration checking enabled and runs routing, equal-duration trials and durable
-storage through the public exports. No app source or existing `node_modules` is
-copied. Temporary directories are removed afterward. This check proves package
-consumption, not game quality, VM isolation or a complete game integration.
+storage through the public exports. Before installing Node types in the consumer,
+it checks the entire portable declaration graph with only ES2023 and DOM globals.
+The source typecheck also excludes Node globals from the portable core. Node
+storage remains separately checked with Node types. No app source or existing
+`node_modules` is copied. Temporary directories are removed afterward. These
+checks prove package consumption and type boundaries, not browser execution,
+game quality, VM isolation or a complete game integration.
 
 Import portable APIs from `@multiverse/gameplay-harness`. Import filesystem stores,
 content hashing and executable artifact storage from

@@ -40,8 +40,11 @@ and executable storage live under `@multiverse/gameplay-harness/node`.
 
 The core types are in [`contracts.ts`](../harness/src/contracts.ts). Doom composes
 the workflow in [`session.ts`](../examples/doom/server/src/session.ts), and chess
-in its own [`session.ts`](../examples/chess/session.ts). There is no universal
-`createGame()` function that removes the need for this application composition.
+in its own [`session.ts`](../examples/chess/session.ts). Both use `LearningLoop`,
+`WorldForks`, `WorldLifecycle`, `CheckpointRecovery` and `runTrials`. Chess implements
+`GameAdapter` directly; Doom supplies domain ports from its existing session and
+planning modules. There is no universal `createGame()` function that removes the
+need for this application composition.
 
 ## Background improvement
 
@@ -140,6 +143,11 @@ declarations and cancellation/attachment responsibilities. A game without exact
 state restoration can still support live decisions and recorded review, but cannot
 claim exact alternative futures. Structured observations and legal controls require
 an adapter; an arbitrary game's URL alone is not an integration.
+
+The portable source is typechecked without Node globals, and the packed public
+API is checked in a separate consumer before Node types are installed. This guards
+the type boundary; it does not prove browser execution or VM isolation. The Node
+entrypoint and concrete executor/providers intentionally retain host dependencies.
 
 See [verification](../VERIFICATION.md) for checks and evidence limits, and the
 [completion checklist](../COMPLETION-CHECKLIST.md) for unfinished work. The older

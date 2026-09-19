@@ -531,6 +531,17 @@ state qualification; no live VM or model call was made for this change.
 Validation passed: 438 application tests, 133 core tests, type checking, production
 build and a clean packed-package install/typecheck/execution outside the checkout.
 
+Portable-boundary qualification (2026-09-19): the core source and the packed
+public declaration graph now compile with only ES2023/DOM globals, without Node
+types. A deliberate `node:fs`/`process`/`Buffer` probe fails this check. The clean
+package check passes all 140 core tests, portable declaration consumption, then
+Node declaration checking and public-API execution. Both game sessions compose
+the same loop/fork/lifecycle/checkpoint/trial primitives; Doom still supplies domain
+ports rather than directly implementing `GameAdapter`. Candidate execution remains
+in the Microsandbox provider; supervisor CLIs are a separate, explicitly bypassed
+host boundary. This closes the source/type dependency check only, not browser
+execution, full adapter composition or current real-runtime isolation qualification.
+
 Completion requires the unchecked items above, not a fixed number of passing
 unit tests. Release, publication and commits still require explicit authorization.
 

@@ -30,8 +30,10 @@ npm --prefix harness run check:package
 ```
 
 That check builds a clean temporary package, installs its tarball into a separate
-consumer, checks public types and exercises exported APIs. It may download npm
-dependencies; it does not call a gameplay model or start game VMs.
+consumer, checks the portable public declarations before installing Node types,
+then checks Node declarations and exercises exported APIs. The core source also
+typechecks with only ES2023/DOM globals. This does not qualify a browser runtime.
+It may download npm dependencies; it does not call a gameplay model or start VMs.
 
 ## Checks that use real services
 

@@ -12,7 +12,7 @@
   "files": ["dist", "README.md", "ADAPTERS.md"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p tsconfig.portable.json",
     "test": "tsx --test test/*.test.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "check:package": "node scripts/check-package.ts",

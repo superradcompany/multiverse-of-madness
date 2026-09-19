@@ -27,7 +27,7 @@ async function run(command: string, args: string[], cwd: string, capture = false
 
 try {
   await mkdir(source); await mkdir(consumer);
-  for (const path of ['src', 'test', 'scripts', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json', 'README.md', 'ADAPTERS.md']) {
+  for (const path of ['src', 'test', 'scripts', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json', 'tsconfig.portable.json', 'README.md', 'ADAPTERS.md']) {
     await cp(join(root, path), join(source, path), { recursive: true });
   }
   await npm(['ci', '--no-audit', '--no-fund'], source);
@@ -42,7 +42,7 @@ try {
   const manifest = JSON.parse(await readFile(join(source, 'package.json'), 'utf8')) as { devDependencies: Record<string, string> };
   await writeFile(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module',
     dependencies: { '@multiverse/gameplay-harness': `file:${join(source, archive.filename)}` },
-    devDependencies: { typescript: manifest.devDependencies.typescript, '@types/node': manifest.devDependencies['@types/node'] },
+    devDependencies: { typescript: manifest.devDependencies.typescript },
   }));
   await cp(join(root, 'scripts/package-consumer.ts'), join(consumer, 'consumer.ts'));
   await writeFile(join(consumer, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
@@ -50,9 +50,18 @@ try {
     noUncheckedIndexedAccess: true, skipLibCheck: false, types: ['node'], outDir: 'compiled',
   }, include: ['consumer.ts'] }));
   await npm(['install', '--ignore-scripts', '--no-audit', '--no-fund'], consumer);
+  // Qualify the entire portable declaration graph before installing Node types.
+  // A server-only dependency must not be hidden by the host consumer's globals.
+  await writeFile(join(consumer, 'portable.ts'), "export * from '@multiverse/gameplay-harness';\n");
+  await writeFile(join(consumer, 'tsconfig.portable.json'), JSON.stringify({ compilerOptions: {
+    target: 'ES2023', module: 'NodeNext', moduleResolution: 'NodeNext', strict: true,
+    skipLibCheck: false, types: [], lib: ['ES2023', 'DOM'], noEmit: true,
+  }, include: ['portable.ts'] }));
+  await run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.portable.json'], consumer);
+  await npm(['install', '--save-dev', '--ignore-scripts', '--no-audit', '--no-fund', `@types/node@${manifest.devDependencies['@types/node']}`], consumer);
   await run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], consumer);
   await run(process.execPath, ['compiled/consumer.js'], consumer);
-  console.log('Package check passed: clean install, core checks, packed declarations, and external ESM execution.');
+  console.log('Package check passed: clean install, core checks, portable declarations without Node types, and external Node ESM execution.');
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
