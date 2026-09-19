@@ -383,6 +383,14 @@ and type checking passed.
 
 ## 6. Resolve performance and sustained-operation concerns
 
+Delivery CPU investigation (2026-09-19): a reproducible offline benchmark now
+measures cloning and the actual patch/encoding path against the retained
+24-world session. Across 500 batches, median work was 0.98 ms for one client and
+1.51 ms for four clients. Encoded messages reconstructed the final view exactly;
+the saved file remained unchanged. This does not measure browser frames, PNG
+delivery or VM contention and does not explain the prior ~600 ms decision waits.
+See `PERFORMANCE.md` for scope and report identity. Live attribution remains open.
+
 - [x] Implement owned background loser cleanup for automatic promotion. The winner
   advances during cleanup; pause, rollback and the next fork join it. Harness
   checks (109 tests), seven session lifecycle tests and a real three-VM Doom

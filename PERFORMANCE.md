@@ -160,6 +160,40 @@ Bytes are not tokens. No new model calls were made, so token/latency savings and
 supervisor quality still require matched live measurements. Healthy or unchanged
 review suppression is not established by these receipts alone.
 
+## Saved-view delivery CPU check
+
+Reproduce without starting any service:
+
+```sh
+node --import tsx scripts/analyze-session-delivery.ts /path/to/session.json
+```
+
+The script clones a retained view and advances one live world's tick/frame version
+per update. It runs 100 warmups and 500 measured batches for each client count,
+using the actual `SessionStream` patch encoder. It verifies reconstruction of the
+encoded messages and unchanged source-file contents. The report contains source
+and benchmark hashes, revision, environment and measurements, not gameplay
+payloads or credentials. `--samples` accepts 10–10000 measured batches.
+
+On 2026-09-19, the stopped `.data-demo-20260918/session.json` provided a 257,840-byte
+view with 24 worlds, five with live roles. Runtime code was at `4aab200`, under
+Node 26.3.1 on macOS arm64. Source SHA-256:
+`9d363a257f71b4830023a80565078d5827d27311c96ece3cc86cf66d7bf4eb35`.
+Local report: `artifacts/performance-analysis/2026-09-19/session-delivery.json`.
+
+| View clone + patch calculation + encoding | Median | p95 | Maximum |
+| --- | ---: | ---: | ---: |
+| One client | 0.98 ms | 1.09 ms | 1.24 ms |
+| Four clients | 1.51 ms | 1.67 ms | 2.75 ms |
+
+Each batch shares one clone and sums patch/encoding work for all clients. Median
+wire payload was 10,900 bytes per client. This excludes snapshot assembly, PNG
+requests/decoding, browser painting, network, persistence, concurrent VM load and
+model/executor waits. Repeated saved-state timings do not establish live FPS or
+rule out CPU contention in a running session. This sample provides no evidence
+that metadata serialization accounts for the previously observed ~600 ms decision
+waits; it does not justify replacing the stream protocol to address those waits.
+
 ## Remaining verification
 
 - Collect the new per-world timing samples and match their executor IDs to phase
@@ -173,6 +207,6 @@ review suppression is not established by these receipts alone.
 - Run sustained gameplay plus background evaluation and verify actual resource
   cleanup. A saved `released` phase alone is not a current process check.
 
-Fresh runtime qualification requires resuming the stopped demo and must wait for
-the user's direction. Offline tests cover report cohort boundaries, missing phase
-coverage, status/revision separation, duplicate rejection and omission of payloads.
+Fresh runtime qualification needs isolated VM/model runs or resuming the stopped
+demo, and still awaits the user's direction. Offline tests cover report cohort
+boundaries, missing phase coverage, status/revision separation, duplicate rejection and omission of payloads.
