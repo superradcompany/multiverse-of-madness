@@ -256,7 +256,13 @@ plies from the initial board; the separate learning run on 4322 bootstrapped a
 Codex-generated strategy, rejected one proposal, activated another and continued
 the same history to eight plies. The shared menu switches between existing sessions.
 These establish integration and ordinary play, not playing strength. Shared session
-creation and explicit migration of historical plain sessions remain unfinished.
+creation remains unfinished. Explicit plain-to-learning chess adoption is now
+implemented through `CHESS_LEARNING=1 CHESS_ADOPT_LEARNING=1`; it preserves board,
+policy, guide, memories, checkpoints and historical replay provenance in format 4.
+Offline tests cover continuation, old-checkpoint rollback, completed-game history,
+refused mid-comparison adoption and publication failure before/after commit.
+Existing learning baselines keep their original identity. Live migration with Jev
+and VM preparation remains unqualified; no historical user session was migrated.
 Doodle Shooter is a candidate, not an already working or source-accessible adapter.
 
 ## 6. Resolve performance and sustained-operation concerns

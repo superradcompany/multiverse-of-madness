@@ -43,9 +43,10 @@ export class ChessSession {
   private pinned?: PinnedLearning;
   private revisionFence = false;
   private games?: ChessSessionCheckpoint['games'];
+  private learningAdoption?: ChessSessionCheckpoint['learningAdoption'];
   private pendingNewGame?: ChessSessionCheckpoint['pendingNewGame'];
 
-  private constructor(readonly directory: string, readonly provider: ChessRuntimeStore, readonly adapter: ChessAdapter, private readonly model: Model, readonly policy: ChessPolicy, private readonly learning?: ChessLearningBinding) {
+  private constructor(readonly directory: string, readonly provider: ChessRuntimeStore, readonly adapter: ChessAdapter, private readonly model: Model, readonly policy: ChessPolicy, private learning?: ChessLearningBinding) {
     const resolved = resolveChessPolicy(policy);
     this.policy = resolved.policy;
     this.provenance = { adapter: adapter.version, model: model.version, policy: resolved.revision };
@@ -124,17 +125,28 @@ export class ChessSession {
 
   static async restore(directory: string, provider: ChessRuntimeStore, adapter: ChessAdapter, model: Model, learning?: ChessLearningBinding): Promise<ChessSession> {
     const saved = await new JsonFileStore(join(directory, 'session.json'), value => value as ChessSessionCheckpoint).load();
-    if (!saved || ![1, 2, 3].includes(saved.version)) throw new Error('Missing or unsupported chess session');
+    if (!saved || ![1, 2, 3, 4].includes(saved.version)) throw new Error('Missing or unsupported chess session');
     if ((saved.version === 1 && (saved.games || saved.pendingNewGame)) || (saved.version === 2 && !saved.games && !saved.pendingNewGame)) throw new Error('Invalid chess game history version');
     const session = new ChessSession(directory, provider, adapter, model, parseChessPolicy(saved.policy), learning);
     if (!same(saved.learning ?? null, learning?.identity ?? null)) throw new Error('Saved chess session requires its original learning supervisor');
-    for (const item of [...saved.worlds, ...saved.points.points.map(point => point.data)]) session.verifyProvenance(item.provenance);
+    if (saved.version === 4) {
+      const adopted = saved.learningAdoption;
+      if (!learning || !adopted || adopted.initial?.epoch !== 0 || typeof adopted.mainId !== 'string' || !adopted.mainId
+        || !Number.isSafeInteger(adopted.ply) || adopted.ply < 0 || saved.provenance.learning || saved.provenance.executor)
+        throw new Error('Invalid chess learning adoption');
+      const initial = learning.resolve(adopted.initial);
+      chessLearningProvenance(adopted.initial, initial, adapter.version);
+      if (!same(initial.policy, session.policy)) throw new Error('Chess learning adoption changed the original policy');
+      session.learningAdoption = structuredClone(adopted);
+    } else if (saved.learningAdoption) throw new Error('Chess learning adoption requires session format 4');
+    for (const item of [...saved.worlds, ...saved.points.points.map(point => point.data),
+      ...(saved.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))]) session.verifyProvenance(item.provenance);
     if (saved.pendingFork) session.verifyProvenance(saved.pendingFork.baseline.provenance);
     if (saved.batch?.provenance) session.verifyProvenance(saved.batch.provenance);
     if (!same(session.provenance, saved.provenance)) throw new Error('Session components changed; explicit revision activation is required');
     const savedGoals = [...saved.worlds, ...saved.points.points.map(point => point.data), ...(saved.pendingFork ? [saved.pendingFork.baseline] : []),
       ...(saved.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))].flatMap(world => world.temporaryGoal ? [world.temporaryGoal] : []);
-    if (saved.version === 3) {
+    if (saved.version >= 3) {
       if (typeof saved.goalScopeId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(saved.goalScopeId)) throw new Error('Invalid saved chess goal scope');
       for (const goal of savedGoals) if (decodeChessTemporaryGoal(goal).record.created.scope.id !== saved.goalScopeId) throw new Error('Saved chess goal belongs to another session');
       session.goalScopeId = saved.goalScopeId;
@@ -175,7 +187,8 @@ export class ChessSession {
   snapshot(): ChessSessionCheckpoint {
     const hasGoals = [...this.worlds.worlds.values(), ...this.points.points.map(point => point.data), ...(this.pendingFork ? [this.pendingFork.baseline] : []),
       ...(this.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))].some(world => world.temporaryGoal);
-    return structuredClone({ version: hasGoals ? 3 : this.games || this.pendingNewGame ? 2 : 1, ...(hasGoals ? { goalScopeId: this.goalScopeId } : {}), objective: this.objective, policy: this.policy, provenance: this.provenance, ...(this.learning ? { learning: this.learning.identity } : {}),
+    return structuredClone({ version: this.learningAdoption ? 4 : hasGoals ? 3 : this.games || this.pendingNewGame ? 2 : 1, ...(hasGoals || this.learningAdoption ? { goalScopeId: this.goalScopeId } : {}), objective: this.objective, policy: this.policy, provenance: this.provenance, ...(this.learning ? { learning: this.learning.identity } : {}),
+      ...(this.learningAdoption ? { learningAdoption: this.learningAdoption } : {}),
       mainId: this.worlds.mainId, worlds: [...this.worlds.worlds.values()].map(world => ({ ...data(world), ...(world.runtime ? { identity: world.runtime.identity } : {}) })),
       cleanup: this.worlds.cleanup, points: this.points, experiences: this.memory.records, pendingFork: this.pendingFork,
       batch: this.batch, pendingInputs: this.pendingInputs, attempts: this.attempts,
@@ -240,6 +253,24 @@ export class ChessSession {
     });
     return result;
   }
+  /** Opt in at a settled boundary. Historical worlds and recordings keep their original provenance. */
+  async adoptLearning(binding: ChessLearningBinding): Promise<void> {
+    await this.revisionBoundary(async () => {
+      if (this.learning) throw new Error('Chess session already has a learning supervisor');
+      const { activation, artifact } = binding.current();
+      if (activation.epoch !== 0 || !same(binding.resolve(activation), artifact)) throw new Error('Adoption requires an unused learning baseline');
+      chessLearningProvenance(activation, artifact, this.adapter.version);
+      if (!same(artifact.policy, this.policy)) throw new Error('Chess learning adoption must preserve the existing policy');
+      if (!same(binding.model(artifact).version, artifact.model)) throw new Error('Chess learning model identity differs from its artifact');
+      const historical = [...this.worlds.worlds.values(), ...this.points.points.map(point => point.data),
+        ...(this.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))];
+      if (historical.some(world => !same(world.provenance, this.provenance))) throw new Error('Unexpected plain chess provenance');
+      this.learning = binding;
+      this.learningAdoption = { initial: structuredClone(activation), mainId: this.worlds.mainId, ply: this.main().state.ply };
+      // Publication can succeed even if its acknowledgment fails. Require reconnect on any failure.
+      try { await this.persist(); } catch (error) { this.failed = true; throw error; }
+    });
+  }
   supervisorContext() { return chessSessionContext(this.objective, this.policy, this.adapter.version, this.games?.currentId); }
   private effectivePolicy(): ChessPolicy { return this.pinned?.policy ?? (this.learning ? resolveChessPolicy(this.learning.current().artifact.policy).policy : this.policy); }
   private pinLearning(): PinnedLearning {
@@ -252,7 +283,10 @@ export class ChessSession {
   }
   private verifyProvenance(provenance: ChessProvenance): void {
     if (!this.learning) { if (provenance.learning) throw new Error('Missing chess learning supervisor'); return; }
-    if (!provenance.learning) throw new Error('Missing chess learning activation provenance');
+    if (!provenance.learning) {
+      if (this.learningAdoption && same(provenance, this.provenance)) return;
+      throw new Error('Missing chess learning activation provenance');
+    }
     const expected = chessLearningProvenance(provenance.learning, this.learning.resolve(provenance.learning), this.adapter.version);
     if (!same(provenance, expected)) throw new Error('Saved chess learning provenance does not match its artifact');
   }

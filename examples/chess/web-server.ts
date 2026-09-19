@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { ChessAdapter, ChessFixtureModel } from './adapter.ts';
 import { ChessJevModel } from './jev.ts';
-import { ChessSession } from './session.ts';
+import { openChessSession } from './session-startup.ts';
 import { ChessRuntimeStore } from './runtime-store.ts';
 import { openChessLearningHost, type ChessLearningHost } from './learning-host.ts';
 import { ChessWebController } from './web-controller.ts';
@@ -90,13 +90,14 @@ try {
   const kind = z.enum(['jev', 'fixture']).parse(process.env.CHESS_MODEL ?? (saved?.provenance.model.id === 'chess-workflow-fixture' ? 'fixture' : 'jev'));
   const model = kind === 'jev' ? await ChessJevModel.open(join(directory, 'jev')) : new ChessFixtureModel();
   const provider = new ChessRuntimeStore(join(directory, 'runtime')), adapter = new ChessAdapter();
-  const learningEnabled = process.env.CHESS_LEARNING === '1' || Boolean(saved?.learning);
-  if (learningEnabled && saved && !saved.learning) throw new Error('Existing plain-Jev session is preserved. Use a new CHESS_DATA_DIR for learning until session migration is available.');
-  if (learningEnabled) {
-    if (!(model instanceof ChessJevModel)) throw new Error('Background learning requires Jev');
-    learningHost = await openChessLearningHost(directory, model, provider);
-  }
-  const session = saved ? await ChessSession.restore(directory, provider, adapter, model, learningHost?.binding) : await ChessSession.create(directory, provider, adapter, model, {}, learningHost?.binding);
+  const opened = await openChessSession({ directory, provider, adapter, model,
+    learningRequested: process.env.CHESS_LEARNING === '1', adoptionRequested: process.env.CHESS_ADOPT_LEARNING === '1',
+    openLearning: async () => {
+      if (!(model instanceof ChessJevModel)) throw new Error('Background learning requires Jev');
+      return openChessLearningHost(directory, model, provider);
+    },
+  });
+  const session = opened.session; learningHost = opened.learningHost;
   controller = new ChessWebController(session, 1000, learningHost);
   await learningHost?.attach(session, () => !controller!.view().busy && !controller!.view().error && !session.snapshot().batch, work => controller!.learningBoundary(work));
   console.log(`Chess ready at http://localhost:${port} (${kind}; paused)`);

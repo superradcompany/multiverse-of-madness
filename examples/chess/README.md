@@ -29,9 +29,25 @@ The host and CLI share the `.owner` lock and cannot write the same session toget
 Use a separate directory for a different model configuration. For background learning, first run `npm run setup:runtime`, then start a separate
 session with `CHESS_LEARNING=1 CHESS_DATA_DIR=.data/chess-learning npm run demo:chess`.
 This additionally requires an authenticated Codex CLI. Saved learning sessions
-reopen with their original supervisor binding automatically. Existing plain-Jev
-sessions remain unchanged and require a separate directory until migration is
-implemented.
+reopen with their original supervisor binding automatically. To enable learning
+on an existing plain-Jev game, stop its host and opt in explicitly:
+
+```sh
+CHESS_LEARNING=1 CHESS_ADOPT_LEARNING=1 CHESS_DATA_DIR=.data/chess-live npm run demo:chess
+```
+
+Finish any pending comparison with Continue before stopping the plain host.
+Adoption preserves the board, moves, goal, policy, remembered outcomes, checkpoints
+and completed-game replays. Only subsequent decisions use the learning system;
+historical moves keep their original provenance. Later starts need neither flag.
+The existing Jev model configuration must match. This writes session format 4,
+which older builds refuse to open. Keep a copy of the stopped session directory
+if you need to return to an older build. Existing learning sessions and plain
+sessions without explicit adoption retain their format.
+
+Offline tests cover adoption, reconnect, old-checkpoint rollback, completed-game
+replay and interrupted publication. This migration has not yet been qualified
+with live Jev and VM preparation.
 
 The shared gamepad menu switches between configured Doom and chess sessions.
 The chess runtime remains a separately owned web entry and data directory.

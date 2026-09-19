@@ -37,12 +37,14 @@ export interface ChessGames {
 }
 export interface PendingChessGame { id: string; previousMainId: string; createdAt: number }
 export interface ChessSessionCheckpoint {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4;
   goalScopeId?: string;
   objective: string;
   policy: ChessPolicy;
   provenance: ChessProvenance;
   learning?: VersionRef;
+  /** Format 4 preserves plain provenance before this explicit adoption boundary. */
+  learningAdoption?: { initial: ActivationRef; mainId: string; ply: number };
   mainId: string;
   worlds: Array<ChessWorldData & { identity?: string }>;
   cleanup: RuntimeReference[];

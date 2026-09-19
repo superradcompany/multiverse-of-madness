@@ -1,8 +1,12 @@
 import { resolvePolicy } from '@multiverse/gameplay-harness';
 import { contentRevision } from '@multiverse/gameplay-harness/node';
-import type { ChessPolicy } from './session-types.ts';
+import type { ChessPolicy, ChessSessionCheckpoint } from './session-types.ts';
 
 export const defaultChessPolicy: ChessPolicy = { threshold: .75, breadth: 2, trialPlies: 2, checkpointEvery: 4, checkpointLimit: 3, memoryCapacity: 64 };
+/** Existing native-learning journals used defaults; adopted journals pin the original plain policy. */
+export function chessLearningBaselinePolicy(saved?: ChessSessionCheckpoint): ChessPolicy {
+  return saved && (!saved.learning || saved.learningAdoption) ? parseChessPolicy(saved.policy) : defaultChessPolicy;
+}
 export function resolveChessPolicy(policy: ChessPolicy) {
   const resolved = resolvePolicy({ version: { id: 'chess-policy', version: '1' }, defaults: defaultChessPolicy, parse: parseChessPolicy },
     { profile: { revision: contentRevision('chess-profile', policy), patch: policy } });
