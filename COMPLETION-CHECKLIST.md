@@ -503,6 +503,16 @@ stopped.
 - [ ] Run the final application/core checks and the required real-runtime and
   cross-game acceptance scenarios. Report failures and unverified claims plainly.
 
+Current clean-checkout qualification (2026-09-19): source revision `b34ef0c`
+passed fresh source-archive installs on Node 24.21.0 and Node 26.3.1 with npm
+11.17.0 on Apple Silicon macOS. Both independently downloaded and hash-verified
+the engine assets, passed typechecking, 491 application tests, 140 core tests,
+four web tests and production builds for the bridge and both viewers. Temporary
+checkouts were removed. See `VERIFICATION.md` and local logs under
+`artifacts/clean-qualification/`. This completes the current offline combined
+checks; real-runtime, cross-game acceptance and live-quality gates remain open.
+The public README now uses HTTPS cloning so setup does not require an SSH key.
+
 Standalone package qualification (2026-09-18): `harness/npm run check:package`
 now builds from a clean source snapshot, runs all 120 core tests, packs compiled
 ESM/declarations, installs the tarball in an external consumer, typechecks with

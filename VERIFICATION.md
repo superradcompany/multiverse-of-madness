@@ -35,6 +35,25 @@ then checks Node declarations and exercises exported APIs. The core source also
 typechecks with only ES2023/DOM globals. This does not qualify a browser runtime.
 It may download npm dependencies; it does not call a gameplay model or start VMs.
 
+## Clean-checkout qualification: 2026-09-19
+
+Commit [`b34ef0c`](https://github.com/superradcompany/multiverse-of-madness/commit/b34ef0cd68c502cec82093158e9e8633e1dbfb47)
+passed separate source-archive installs on Apple Silicon macOS with **Node 24.21.0**
+and **Node 26.3.1**, both using npm 11.17.0. Each started without `.env`, `node_modules`,
+or build output. `npm ci` and `npm run setup:assets` succeeded;
+the downloaded engine and WAD matched their pinned hashes.
+
+Each run passed typechecking, **491 application tests**, **140 core tests**, **four
+web tests**, and the bridge/Doom/chess production builds. Temporary checkouts were
+removed afterward. Local phase logs and command/exit reports are retained under
+`artifacts/clean-qualification/b34ef0c/` and `b34ef0c-node24/`; these are ignored
+artifacts, not bundled downloads.
+
+These tests include local WASM, fixture providers and temporary processes. No real
+model, game VM or saved demo was started. This verifies clean installation and
+offline integration on those versions, not live FPS, autonomous recovery, Linux
+support or the remaining real-runtime acceptance scenarios.
+
 ## Checks that use real services
 
 These commands require setup and may create VMs and/or make model calls. They are

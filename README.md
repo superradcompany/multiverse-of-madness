@@ -13,7 +13,7 @@ Requires **Node.js 24+** and a **TypeSafe/Jev API key**. Doom also needs Apple
 Silicon macOS or a Linux host with KVM; the demo has been tested on Apple Silicon.
 
 ```sh
-git clone git@github.com:superradcompany/multiverse-of-madness.git
+git clone https://github.com/superradcompany/multiverse-of-madness.git
 cd multiverse-of-madness
 npm ci
 cp .env.example .env
