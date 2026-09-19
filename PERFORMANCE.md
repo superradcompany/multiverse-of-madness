@@ -67,6 +67,28 @@ ordinary frame delivery is much faster. Provisioning and cleanup are plausible
 optimization targets. This is evidence for investigation, not a causal breakdown
 of each visible pause or a benchmark of the current source revision.
 
+## Early cancellation of stale prefetches
+
+The Doom session now checks an owned prefetch while its current plan advances.
+When observed facts or instructions invalidate it, cancellation starts immediately
+instead of waiting for the next decision boundary. Its cleanup can overlap the
+rest of the plan. The slot stays owned until decision consumption or pause joins
+cleanup, and remains occupied so repeated combat changes cannot dispatch a new
+speculative call every frame. Boundary checks still reject stale answers.
+
+A controlled session test changes health 20 ticks into a plan, observes cancellation
+at that tick, advances five more ticks while cleanup is still pending, and releases
+cleanup at 30 ticks before a fresh decision at the 35-tick boundary. A core test verifies that
+even a provider returning an answer after cancellation cannot revive the result;
+ownership cannot be reused before cleanup joins. Existing tests cover usable
+prefetches, changed instructions/skills and expired temporary goals.
+
+This removes a late-cancellation path; it does not remove the need to request a
+fresh decision after changed facts. A local predicate microbenchmark against five
+saved world states averaged about 0.0042 ms per check over 50,000 checks. That is
+only repeated-state CPU cost, not live performance or proof of pause reduction.
+The change is not deployed to the stopped demo and has no new VM qualification.
+
 ## Remaining verification
 
 - Correlate individual decisions with preparation, Jev, journal, fork and

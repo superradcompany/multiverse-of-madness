@@ -38,3 +38,29 @@ test('validity is rechecked after waiting and a consuming owner can cancel a dif
   await Promise.resolve(); const cancelled = slot.take(() => true, owner.signal);
   owner.abort(); await assert.rejects(cancelled, /abort/i); assert.equal(slot.pending, false);
 });
+
+test('early invalidation starts cancellation but retains ownership until cleanup joins', async () => {
+  const slot = new DecisionPrefetch<string, number>(), owner = new AbortController();
+  let release!: () => void, cancellations = 0;
+  const cleanup = new Promise<void>(resolve => { release = resolve; });
+  slot.start('old-facts', async signal => {
+    signal.addEventListener('abort', () => { cancellations++; });
+    await cleanup;
+    // Even a provider that returns a value after cancellation cannot revive it.
+    return 7;
+  }, owner.signal);
+  await Promise.resolve();
+  assert.equal(slot.invalidate(context => context === 'old-facts'), false);
+  assert.equal(slot.invalidate(() => false), true);
+  assert.equal(slot.invalidate(() => { throw new Error('Already invalidated'); }), false);
+  assert.equal(cancellations, 1);
+  assert.equal(slot.pending, true);
+  assert.equal(slot.start('new-facts', async () => 8, owner.signal), false);
+  let joined = false;
+  const taking = slot.take(() => true, owner.signal).then(value => { joined = true; return value; });
+  await Promise.resolve(); assert.equal(joined, false);
+  release();
+  assert.equal(await taking, undefined);
+  assert.equal(slot.pending, false);
+  assert.equal(slot.invalidate(() => false), false);
+});

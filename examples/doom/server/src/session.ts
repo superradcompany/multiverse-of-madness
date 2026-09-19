@@ -929,11 +929,23 @@ export class Session extends EventEmitter {
     return { decision, experience: decision.selectedExperience ?? experience, policy, skillsRevision, learning };
   }
   private prepareNextDecision(world: World, signal: AbortSignal): void {
+    const pending = this.nextDecisions.get(world.view.id);
+    if (pending) {
+      // Cleanup can overlap the remaining plan instead of starting at its boundary.
+      // Keep the slot owned: ask/pause still join it, and no replacement call is
+      // admitted every frame when combat repeatedly changes the observations.
+      if (pending.invalidate(question => !this.view.pendingObjective && question.objective === this.view.objective
+        && question.skillsRevision === (this.view.skillsRevision ?? 0)
+        && decisionStateIsCurrent(question.state, world.view.state, world.plan))) {
+        this.emit('decision-prefetch-cancelled', { worldId: world.view.id, tick: world.view.state.tick });
+      }
+      return;
+    }
     const run = world.plan, left = run ? run.untilTick - world.view.state.tick : 0;
     const measured = this.decisionLatency.get(world.view.id) ?? this.view.decision?.latencyMs ?? 600;
     const lead = this.options.paceMs > 0 ? Math.min(decisionLeadTicks, Math.max(4, Math.ceil((measured + 75) / this.options.paceMs))) : decisionLeadTicks;
     if (!this.view.running || this.view.planningMode !== 'plans' || !run || run.status !== 'running'
-      || left <= 0 || left > lead || this.view.pendingObjective || this.nextDecisions.has(world.view.id)) return;
+      || left <= 0 || left > lead || this.view.pendingObjective) return;
     const trialLeft = world.view.role === 'experiment' && this.baseline && world.view.trial
       ? this.baseline.tick + world.view.trial.total - run.untilTick : 0;
     const horizon = trialLeft > 0 ? trialLeft : this.view.trialDurationTicks ?? this.options.horizon;

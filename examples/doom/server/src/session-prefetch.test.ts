@@ -107,3 +107,46 @@ test('a prepared goal that expires during prefetch cannot authorize the next pla
     assert.equal(session.snapshot().error, undefined);
   } finally { finish(); await session.close(); }
 });
+
+test('stale prefetch cleanup overlaps gameplay without replacement calls before the boundary', async () => {
+  let calls = 0, observedTick = initial.tick, abortedAt: number | undefined, cleaned = false;
+  let release!: () => void;
+  const cleanup = new Promise<void>(resolve => { release = resolve; });
+  const runtime = new Runtime('early-prefetch-cleanup');
+  const step = runtime.step.bind(runtime);
+  runtime.step = async command => {
+    const state = await step(command);
+    return state.tick >= initial.tick + 20 ? { ...state, health: 99 } : state;
+  };
+  const session = new Session({ decide: async (_state, _goal, _history, signal) => {
+    calls++;
+    if (calls === 2) {
+      signal.addEventListener('abort', () => { abortedAt = observedTick; });
+      await cleanup;
+      cleaned = true;
+      signal.throwIfAborted();
+    }
+    if (calls === 3) assert.equal(cleaned, true, 'fresh work must follow joined cleanup');
+    return nextPlan(calls === 1 ? 100 : 200);
+  } }, { threshold: 0, branches: 2, horizon: 70, paceMs: 0 });
+  await session.initialize(runtime); session.setPlanningMode('plans'); session.setDecisionInterval(35);
+  let paused: Promise<void> | undefined, continuedDuringCleanup = false;
+  session.setRecorder(async world => {
+    observedTick = world.state.tick;
+    if (observedTick === initial.tick + 25) {
+      assert.equal(abortedAt, initial.tick + 20);
+      assert.equal(cleaned, false);
+      assert.equal(calls, 2);
+      continuedDuringCleanup = true;
+    }
+    if (observedTick === initial.tick + 30) release();
+    if (calls >= 3) paused ??= session.pause();
+  });
+  try {
+    session.resume(); await session.idle(); await paused;
+    assert.equal(continuedDuringCleanup, true);
+    assert.equal(calls, 3);
+    assert.equal(session.snapshot().decision?.prefetched, false);
+    assert.equal(session.snapshot().error, undefined);
+  } finally { release(); await session.close(); }
+});

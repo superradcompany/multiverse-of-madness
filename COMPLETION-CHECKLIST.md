@@ -287,6 +287,15 @@ decision-path preparation/lifecycle work; it does not establish current-build
 FPS, per-decision causal attribution or a completed performance fix. No server
 or VM was started.
 
+Early stale-prefetch cancellation (2026-09-19): Doom now begins cancellation when
+ongoing play invalidates captured facts/instructions, allowing cleanup to overlap
+the current plan. The owned slot blocks replacement calls and is still joined at
+the decision boundary or pause. Controlled core/session tests verify continued
+game ticks during cleanup, no request churn and rejection of cancelled answers.
+This removes one avoidable boundary wait; live pause reduction remains unverified
+and the stopped demo has not been upgraded. Type checking, 411 application tests,
+127 harness tests and the production build passed.
+
 ## 7. Complete the viewer and replay experience
 
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,

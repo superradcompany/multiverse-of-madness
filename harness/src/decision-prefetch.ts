@@ -18,6 +18,13 @@ export class DecisionPrefetch<Context, Result> {
     return true;
   }
   cancel(): void { this.attempt?.controller.abort(new Error('Speculative decision no longer needed')); }
+  /** Begin cleanup as soon as captured facts become stale. Ownership remains until take/discard joins it. */
+  invalidate(isCurrent: (context: Context) => boolean): boolean {
+    const attempt = this.attempt;
+    if (!attempt || attempt.controller.signal.aborted || isCurrent(attempt.context)) return false;
+    this.cancel();
+    return true;
+  }
   async take(isCurrent: (context: Context, result?: Result) => boolean, signal: AbortSignal): Promise<Result | undefined> {
     const attempt = this.attempt;
     if (!attempt) return undefined;
