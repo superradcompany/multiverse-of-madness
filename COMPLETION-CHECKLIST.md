@@ -215,6 +215,19 @@ and a later guide update demonstrate automatic publication, but opening-scenario
 scores do not establish recovery from a later encounter. High Jev confidence is
 not the success criterion.
 
+Supervisor evidence efficiency (2026-09-19): an offline report over 63 distinct
+historical provider receipts measures prompt size, elapsed time and reported
+tokens without treating missing usage as zero or summing copied receipt IDs.
+Exact duplicate states are now removed only from the supervisor's illustrative
+preparation history, with explicit omission counts and valid example indices.
+Live Jev history, complete observation evidence, source and plan menus remain
+unchanged. Re-encoding 46 archived examples reduced their complete JSON prompt
+envelopes by 8.74%, including explanatory metadata. This is byte reduction, not
+measured token/latency improvement or quality qualification. Healthy-review
+suppression and current unattended cadence still require observation. Details and
+the read-only command are in `PERFORMANCE.md`. Type checking, 426 application
+tests and the production build passed; no model or VM was started.
+
 Chess now has a separate full-harness paired evaluator that measures actual
 forks, discarded inputs and selected-path promotion under matched allowances.
 The real 12-run check at `artifacts/chess-strategy-evaluation/2026-09-18T18-21-14.994Z`

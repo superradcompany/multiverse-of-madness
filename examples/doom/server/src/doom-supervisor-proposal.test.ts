@@ -15,6 +15,7 @@ import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import { decodeDoomProposal, doomSupervisorEvidence, generateDoomProposal, type DoomProposalOptions, type DoomProposalRecord } from './doom-supervisor-proposal.ts';
 import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
+import { doomPreparationInput } from './doom-preparation-input.ts';
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const guidance = { kind: 'guidance', reason: 'Reduce repeated unproductive movement', prompts: { plan: 'Use measured progress before repeating a waypoint.' } };
@@ -67,6 +68,31 @@ test('generation freezes observed evidence, accounts actual usage and submits wi
     assert.deepEqual(result.output, guidance);
     assert.deepEqual((await f.run()).candidate, result.candidate); assert.equal(f.calls, 1);
     assert.equal(JSON.stringify(result.request).includes('acceptance: '), false);
+  } finally { await f.cleanup(); }
+});
+
+test('planner examples omit exact repeated states while preserving observation evidence and valid runtime input', async () => {
+  const f = await fixture();
+  try {
+    const captured = f.session.checkpoint(), main = captured.worlds[0]!;
+    const earlier = { ...structuredClone(main.view.state), tick: main.view.state.tick - 7, x: main.view.state.x - 20 };
+    main.history = [earlier, structuredClone(main.view.state)];
+    f.options.capture = () => structuredClone(captured);
+    const before = f.session.checkpoint(), result = await f.run();
+    const example = result.request.evidence.preparationExample as Awaited<ReturnType<typeof doomPreparationInput>>;
+    assert.deepEqual(example.history, [earlier]);
+    assert.deepEqual(example.defaultHistoryIndices, [0]);
+    assert.equal(result.request.evidence.preparationExampleHistory!.repeatsCurrentState, 1);
+    assert.deepEqual(result.request.evidence.observations, doomSupervisorEvidence(captured));
+    const original = await doomPreparationInput(result.request.current, main.view.state, result.request.objective, main.history, [],
+      example.actionTicks, { policy: result.request.current.policy, planTicks: example.planTicks, stats: example.stats, visited: main.stats?.visited, pickups: main.pickups });
+    assert.deepEqual(example.feedback, original.feedback);
+    assert.deepEqual(example.defaultPlans, original.defaultPlans);
+    assert.deepEqual(example.state, original.state); assert.deepEqual(example.stats, original.stats);
+    assert.deepEqual(main.history, [earlier, main.view.state]);
+    assert.deepEqual(f.session.checkpoint(), before);
+    const reopened = await f.run(); assert.equal(f.calls, 1);
+    assert.deepEqual(reopened.request, result.request);
   } finally { await f.cleanup(); }
 });
 

@@ -121,6 +121,45 @@ burst completion was 10.24 ms. This isolated host measurement does not explain
 the approximately 600 ms decision waits and does not justify changing persistence
 formats. Details: `artifacts/performance-analysis/2026-09-19/journal-cost.json`.
 
+## Supervisor evidence size
+
+Run a read-only report over a learning directory and its historical lineages:
+
+```sh
+node --import tsx scripts/analyze-supervisor-history.ts /path/to/learning
+```
+
+The report emits counts and an archive fingerprint, not prompts or game data.
+Duplicate receipt IDs are refused to avoid summing copied history. Missing token
+counts remain unknown, historical token-only receipts are supported, and cached
+input is not added again. Pending receipts do not enter elapsed-time statistics.
+
+On 2026-09-19, the stopped demo's `.data-demo-20260918/learning` archive contained
+63 distinct supervisor receipts across the original directory and 16 lineages:
+56 complete and seven cancelled. Median reported input size was 81,353 bytes;
+median elapsed time across all settled calls was 138,987 ms. Fifty-six calls
+reported 2,755,605 input and 239,146 output tokens in total. Usage for the other
+seven calls is unknown. These historical calls span different source revisions
+and review circumstances; they are not a current performance benchmark or a
+measurement of automatic review cadence.
+
+Among 46 archived preparation examples, 46 of 91 sampled history entries exactly
+repeated the current state. The supervisor's illustrative example now omits exact
+duplicates of the current state or an earlier sampled entry, reports their counts,
+and recalculates valid example history indices. Jev's actual history and the full
+supervisor observation evidence are unchanged. Changed ticks, resources, positions
+or telemetry are retained even when the player remains in the same room. Tests
+also verify unchanged derived feedback, default plans, current state and stats.
+
+Re-encoding those 46 historical prompt envelopes with this sampling rule and its
+explanatory metadata reduced JSON from 4,294,592 to 3,919,228 bytes: 375,364 bytes
+(8.74%), with a median reduction of 8,480.5 bytes per envelope. This reuses the
+archived example windows; original unsampled history lengths are unavailable.
+The local report is `artifacts/performance-analysis/2026-09-19/supervisor-history.json`.
+Bytes are not tokens. No new model calls were made, so token/latency savings and
+supervisor quality still require matched live measurements. Healthy or unchanged
+review suppression is not established by these receipts alone.
+
 ## Remaining verification
 
 - Collect the new per-world timing samples and match their executor IDs to phase

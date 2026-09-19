@@ -9,6 +9,7 @@ import { learningProposalKinds, type LearningProposalKind } from '../../contract
 import { activeSkills } from '../../contracts/src/skills.ts';
 import { doomPreparationInput } from './doom-preparation-input.ts';
 import { doomPreparationSchema } from './doom-preparation.ts';
+import { supervisorExampleHistory } from './supervisor-example-history.ts';
 import { doomEvaluationFeedback } from './doom-evaluation-feedback.ts';
 import { decisionStatistics } from './decision-context.ts';
 import { decisionState } from './jev.ts';
@@ -50,7 +51,7 @@ function supervisorTiming(saved: SessionCheckpoint) {
     planningMode: saved.view.planningMode ?? 'actions', ticksPerSecond: 35,
     scope: 'Current settings for the next judgment, not historical execution. Trial ticks are the comparison horizon; action ticks are the configured decision interval. Plans can stop early and decisions inside a future are bounded by its remaining time.' };
 }
-export interface DoomProposalEvidence { testsSavedSituation?: boolean; requestedKind?: LearningProposalKind; preparationExample?: unknown; preparationOutputSchema?: unknown; observations: Record<string, unknown>; currentSource?: ExecutableSource; previousExperiments?: unknown[] }
+export interface DoomProposalEvidence { testsSavedSituation?: boolean; requestedKind?: LearningProposalKind; preparationExample?: unknown; preparationExampleHistory?: ReturnType<typeof supervisorExampleHistory>['sampling']; preparationOutputSchema?: unknown; observations: Record<string, unknown>; currentSource?: ExecutableSource; previousExperiments?: unknown[] }
 /** Report host decisions and aggregate outcomes, never private acceptance states or scenario identities. */
 export function doomPreviousExperiments(journal: RevisionJournal<DoomPolicy>, context: VersionRef): Record<string, unknown>[] {
   return journal.proposals.filter(proposal => proposal.qualification || proposal.error).slice(-4).map(proposal => {
@@ -172,12 +173,14 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
     outputSchema: JSON.parse(JSON.stringify(z.toJSONSchema(kind ? draftSchema.options.find(schema => schema.shape.kind.value === kind)! : draftSchema))) };
   if (!kind || kind === 'planner') {
     const main = saved.worlds.find(world => world.view.id === saved.view.mainId)!;
-    const history = main.history.slice(-2), experience = (saved.experience?.records ?? []).slice(-2);
+    const { history, sampling } = supervisorExampleHistory(main.view.state, main.history);
+    const experience = (saved.experience?.records ?? []).slice(-2);
     const example = await doomPreparationInput(current, main.view.state, request.objective, history, experience,
       supervisorTiming(saved).actionTicks, { policy: current.policy, planTicks: saved.view.trialDurationTicks ?? current.policy.trialTicks,
         stats: decisionStatistics(main.view.state, main.stats), skills: saved.view.skills, experiencePool: experience,
         visited: main.stats?.visited, pickups: main.pickups, previousPlan: previousPlanFeedback(main.plan, main.view.state) });
     request.evidence.preparationExample = example;
+    if (sampling.repeatsCurrentState || sampling.repeatsEarlierEntry) request.evidence.preparationExampleHistory = sampling;
     request.evidence.preparationOutputSchema = JSON.parse(JSON.stringify(z.toJSONSchema(doomPreparationSchema)));
   }
   if (kind !== 'guidance' && current.executor.id === 'learning-executor') request.evidence.currentSource = (await options.executables.get(current.executor)).source;
