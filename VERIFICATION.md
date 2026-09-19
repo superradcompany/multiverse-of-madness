@@ -56,6 +56,9 @@ support or the remaining real-runtime acceptance scenarios.
 
 ## Checks that use real services
 
+The [remaining live qualification runbook](docs/LIVE-QUALIFICATION.md) maps these
+smokes to the broader acceptance requirements and records ownership/cleanup rules.
+
 These commands require setup and may create VMs and/or make model calls. They are
 not part of the offline suite. Read the script's inputs and ownership behavior
 before running it, especially for commands that reconnect an existing session.
