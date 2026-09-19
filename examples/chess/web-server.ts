@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { sessionControl } from '../shared/server/session-control.ts';
 import { mkdir, open, readFile, stat, unlink } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -13,6 +14,7 @@ import type { ChessSessionCheckpoint } from './session-types.ts';
 
 const port = z.coerce.number().int().min(1).max(65535).parse(process.env.CHESS_PORT ?? 4321);
 const directory = resolve(process.env.CHESS_DATA_DIR ?? '.data/chess-live');
+const managed = sessionControl(port);
 const root = resolve('dist/web');
 const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
 const command = z.discriminatedUnion('type', [
@@ -24,9 +26,12 @@ const command = z.discriminatedUnion('type', [
 ]);
 let controller: ChessWebController | undefined;
 let learningHost: ChessLearningHost | undefined;
+let closing = false;
 const server = createServer(async (req, res) => {
+  if (managed.handle(req, res)) return;
   const json = (code: number, value: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(value)); };
   if (!allowedHosts.has(req.headers.host ?? '') || (req.headers.origin && ![...allowedHosts].some(host => req.headers.origin === `http://${host}`))) { json(403, { error: 'Origin rejected' }); return; }
+  if (closing) { json(503, { error: 'Chess session is stopping' }); return; }
   if (!controller) { json(503, { error: 'Chess session is starting' }); return; }
   const url = new URL(req.url ?? '/', `http://localhost:${port}`);
   try {
@@ -102,10 +107,10 @@ try {
   await learningHost?.attach(session, () => !controller!.view().busy && !controller!.view().error && !session.snapshot().batch, work => controller!.learningBoundary(work));
   console.log(`Chess ready at http://localhost:${port} (${kind}; paused)`);
 } catch (error) { server.close(); await learningHost?.close(); await release(); throw error; }
-let closing = false;
 async function close() {
   if (closing) return; closing = true;
-  const stopped = new Promise<void>(done => server.close(() => done()));
-  await controller!.pause(); await learningHost?.close(); await controller!.close(); await stopped; await release();
+  await controller!.pause(); await learningHost?.close(); await controller!.close();
+  await new Promise<void>(done => server.close(() => done())); await release();
 }
 for (const signal of ['SIGTERM', 'SIGINT'] as const) process.on(signal, () => { void close().catch(error => { console.error(error); process.exitCode = 1; }); });
+managed.ready(close);

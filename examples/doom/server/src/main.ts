@@ -1,4 +1,5 @@
 import { VmSettingsStore } from './vm-settings.ts';
+import { sessionControl } from '../../../shared/server/session-control.ts';
 import { SessionStream } from './session-stream.ts';
 import { RecordingReader } from './recording-reader.ts';
 import { BufferedRecorder } from './buffered-recorder.ts';
@@ -31,10 +32,12 @@ import { Recordings } from './recordings.ts';
 
 const port = z.coerce.number().int().min(1).max(65535).parse(process.env.PORT ?? 4317);
 const dataDirectory = z.string().min(1).optional().parse(process.env.MOM_DATA_DIR);
+const managed = sessionControl(port);
 // Bind first: older servers did not take a data lease, but already own their HTTP port.
 // No session, recording, VM or learning journal is opened before both ownership checks succeed.
 let handler: RequestListener | undefined;
 const server = createServer((req, res) => {
+  if (managed.handle(req, res)) return;
   if (handler) { handler(req, res); return; }
   res.writeHead(503, { 'content-type': 'application/json', 'cache-control': 'no-store', 'retry-after': '1' });
   res.end(JSON.stringify({ error: 'Session is starting' }));
@@ -312,3 +315,4 @@ async function shutdown() {
   server.closeAllConnections();
 }
 process.on('SIGINT', () => void shutdown()); process.on('SIGTERM', () => void shutdown());
+managed.ready(shutdown);

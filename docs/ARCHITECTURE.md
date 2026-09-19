@@ -95,9 +95,14 @@ than silently creating a replacement game.
 
 ## Persistence and ownership
 
-Each backend owns one data directory. Separate sessions need separate directories
-and ports. The gamepad menu links configured running backends; it does not create
-sessions, launch servers or manage a shared session catalog.
+Each backend owns one data directory. The optional local sessions manager creates
+a versioned catalog with separate UUID directories, ports and private control
+tokens. It starts detached hosts only on request and reconnects to them by token
+after a manager restart. It can rename runs and request graceful host shutdown;
+it never deletes game data or kills an unverified PID. Existing standalone commands
+and their data formats remain unchanged. The gamepad menu links managed viewers
+back to the catalog, or links configured backends for standalone viewers. See
+[sessions](SESSIONS.md) for setup, ownership and evidence limits.
 
 World journals retain physical identities and unfinished operations. Startup
 reconciles interrupted input, fork, promotion and cleanup work before accepting new

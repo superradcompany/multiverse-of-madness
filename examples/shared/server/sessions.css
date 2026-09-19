@@ -1,0 +1,17 @@
+:root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; background: #0c0910; color: #f1eaf8; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1120px; margin: auto; padding: 40px 24px; }
+header, .session-title, .actions { display: flex; justify-content: space-between; gap: 18px; align-items: center; }
+header { margin-bottom: 32px; } h1 { margin: 0; font-size: clamp(26px, 4vw, 36px); } h2 { font-size: 20px; margin: 0 0 16px; overflow-wrap: anywhere; }
+p { color: #bcaec9; margin: 6px 0; }.eyebrow { font-size: 12px; letter-spacing: .06em; color: #be9ddb; }
+.create, article { border: 1px solid #42334f; border-radius: 16px; padding: 24px; background: #130e1b; }
+.create { margin-bottom: 28px; }.create form { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; align-items: end; }
+label, .field { display: grid; gap: 6px; } input, select, button, .button { font: inherit; border-radius: 9px; padding: 10px 14px; border: 1px solid #5a456b; background: #21172d; color: inherit; min-height: 44px; }
+input, select { width: 100%; min-width: 0; }.check { display: flex; align-items: center; gap: 10px; min-height: 44px; }.check input { width: 18px; min-height: 18px; }
+button, .button, summary { cursor: pointer; }.button { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; white-space: nowrap; } button:hover, .button:hover { border-color: #bd96e3; }
+.primary, .create button { background: #7945ba; border-color: #a270d6; }.hint, footer { font-size: 13px; color: #ad9aba; }.hint { margin-top: 16px; }
+.sessions { display: grid; gap: 18px; }.session-title h2 { margin-bottom: 12px; }.status { font-size: 13px; color: #d2b0ef; white-space: nowrap; }.actions { justify-content: flex-start; flex-wrap: wrap; }
+details form { display: grid; gap: 10px; margin-top: 12px; }.notice { padding: 14px 18px; background: #40253b; border-radius: 9px; margin-bottom: 24px; }footer { margin-top: 28px; max-width: 800px; }.empty { padding: 24px 0; }
+:focus-visible { outline: 2px solid #cca3f3; outline-offset: 3px; }
+@media(max-width: 560px) { main { padding: 24px 16px; }.create, article { padding: 18px; }.create form { grid-template-columns: 1fr; }header { align-items: flex-start; }.session-title { align-items: flex-start; flex-direction: column; gap: 0; }.status { margin-bottom: 16px; } }

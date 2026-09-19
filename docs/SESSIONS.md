@@ -1,12 +1,49 @@
 # Games and saved sessions
 
-Each example backend owns one session directory. The gamepad button in either
-viewer opens **Games & sessions** and navigates between configured backends.
-Switching pages leaves game state, settings, learning history and replays with
-their backend. A playing run continues; pause it first if you want it stopped.
+Each example backend owns one session directory. Switching pages leaves game
+state, settings, learning history and replays with its backend. A playing run
+continues; pause it first if you want it stopped.
 
-The menu does not launch a server, create a session or migrate data. There is no
-shared session-creation manager yet.
+## Create and manage runs
+
+```sh
+npm run demo:sessions
+```
+
+Open <http://localhost:4316>. This command sets up Doom assets/runtime and builds
+both viewers, but does not start any game backend. **Create session** saves a
+catalog entry; **Start backend** opens that run in a detached process. **Open game**
+takes you to its viewer. Gameplay starts paused. Enabling chess background learning
+requires the VM runtime and authenticated Codex CLI and can begin supervisor work
+as soon as its backend starts. Enable Doom learning in its gameplay settings.
+
+The manager supports creation, renaming, starting, reopening and graceful backend
+stopping. Runs have distinct, stable ports and UUID directories under
+`.data/sessions/runs/`. Each backend retains its own settings, learning files and
+replays. Names are display labels, never filesystem paths. **Rename** does not move
+or reset data. The gamepad menu in a managed viewer links back to this page.
+
+Closing the page or manager leaves its backends running. Restarting the manager
+with the same directory and port reconnects by a private per-session token; it
+does not trust or kill a saved PID. An occupied port with an unverified owner is
+reported as unavailable. It is never silently reassigned to another run.
+
+**Stop backend** pauses scheduling, saves state and closes the host. Chess retains
+its board history. Doom retains its detached game VM and checkpoints for reopening;
+this button does **not** destroy all Microsandboxes. Detached VM RAM does not survive
+host shutdown. The manager neither deletes recordings nor adopts historical demo
+directories. Existing standalone runs remain available through the commands below.
+
+`SESSIONS_PORT` (default `4316`) and `SESSIONS_DATA_DIR` (default `.data/sessions`)
+configure the manager. Keep these stable when reopening it. Its versioned
+`sessions.json` is private and contains control tokens. Do not publish it. Backend
+startup failures are written to `runs/<id>/host.log`; no log is sent to the browser.
+A failed chess process can leave its exclusive `.owner` file; the manager does not
+steal that lock. Resolve the reported ownership error before starting it again.
+
+Lifecycle tests and browser checks use offline HTTP fixtures, including a detached
+child and manager reconnection. Managed real-game creation/reopening and a
+cross-game replay/learning isolation soak still need live qualification.
 
 ## Run separate sessions
 
@@ -28,9 +65,10 @@ Never point two backends at the same data directory. Doom has a process lease;
 chess has an exclusive `.owner` file. Neither provides multi-host shared storage
 coordination. The local servers are not authenticated multi-user services.
 
-## Configure the menu
+## Configure standalone navigation
 
-On loopback hosts, defaults link Doom on 4317 and chess on 4321. Other hosts show
+For independently launched backends, the gamepad menu links configured runs; it
+does not start them. On loopback hosts, defaults link Doom on 4317 and chess on 4321. Other hosts show
 only the current run unless a catalog is supplied. A custom-port current run is
 included automatically.
 

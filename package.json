@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "npm run build:harness && tsc --noEmit",
-    "test": "npm run build:harness && tsx --test examples/doom/server/src/*.test.ts examples/doom/bridge/src/*.test.ts packages/executor-microsandbox/src/*.test.ts packages/supervisor-claude/src/*.test.ts packages/supervisor-codex/src/*.test.ts examples/chess/*.test.ts",
+    "test": "npm run build:harness && tsx --test examples/doom/server/src/*.test.ts examples/doom/bridge/src/*.test.ts packages/executor-microsandbox/src/*.test.ts packages/supervisor-claude/src/*.test.ts packages/supervisor-codex/src/*.test.ts examples/chess/*.test.ts examples/shared/server/*.test.ts",
     "bridge": "tsx examples/doom/bridge/src/server.ts",
     "smoke:engine": "tsx scripts/engine-smoke.ts",
     "build": "npm run build:harness && tsx scripts/build-bridge.ts && npm run build:web",
@@ -38,6 +38,7 @@
     "build:web:doom": "vite build examples/doom/web",
     "build:web:chess": "vite build examples/chess/web",
     "demo:doom": "npm run setup && npm start",
+    "demo:sessions": "npm run setup && node --env-file-if-exists=.env --import tsx examples/shared/server/session-server.ts",
     "demo:chess": "npm run build:harness && npm run build:web:chess && node --env-file-if-exists=.env --import tsx examples/chess/web-server.ts"
   },
   "dependencies": {

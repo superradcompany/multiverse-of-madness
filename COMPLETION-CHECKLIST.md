@@ -256,7 +256,13 @@ plies from the initial board; the separate learning run on 4322 bootstrapped a
 Codex-generated strategy, rejected one proposal, activated another and continued
 the same history to eight plies. The shared menu switches between existing sessions.
 These establish integration and ordinary play, not playing strength. Shared session
-creation remains unfinished. Explicit plain-to-learning chess adoption is now
+creation and management are now implemented through `npm run demo:sessions`:
+isolated directories and stable ports, a versioned catalog, explicit detached host
+start, authenticated reconnect/stop, rename and viewer navigation. Offline HTTP
+fixtures verify isolation and recovery, including a real detached fixture process;
+browser checks exercise the forms at desktop and phone widths. Actual managed game
+start/reopen and replay/learning isolation still need live qualification, so the
+broader requirement remains open. Explicit plain-to-learning chess adoption is now
 implemented through `CHESS_LEARNING=1 CHESS_ADOPT_LEARNING=1`; it preserves board,
 policy, guide, memories, checkpoints and historical replay provenance in format 4.
 Offline tests cover continuation, old-checkpoint rollback, completed-game history,

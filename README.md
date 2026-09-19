@@ -31,6 +31,11 @@ automatically; Doom's first launch downloads the engine assets and VM runtime.
 Both start paused. Press **Play/Resume** in the browser. Refreshing preserves the
 session; use **Restart/New game** to start over.
 
+For several saved runs, use `npm run demo:sessions`, then open
+<http://localhost:4316>. Create a Doom or chess session and start its backend from
+that page. Each run keeps separate settings and history. The gamepad menu returns
+to the sessions page. See [session management](docs/SESSIONS.md) for stop/reopen behavior.
+
 Background supervision additionally needs an authenticated Codex or Claude CLI.
 See the [Doom guide](examples/doom/README.md) or [chess guide](examples/chess/README.md)
 for enabling it, configuration and troubleshooting.
