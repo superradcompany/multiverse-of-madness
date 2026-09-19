@@ -19,6 +19,6 @@ export type PreviousPlanFeedback = NonNullable<ReturnType<typeof previousPlanFee
 /** These observed stops indicate missing/ineffective candidates, rather than normal completion or fresh threats. */
 export function failedPlanFeedback(run: PlanExecution, current: GameState): PreviousPlanFeedback | undefined {
   if (run.status !== 'replan' || !new Set(['target became obstructed', 'target lost or ambiguous', 'step time limit reached',
-    'interaction out of reach', 'strafe route blocked', 'route blocked']).has(run.reason ?? '')) return;
+    'interaction out of reach', 'melee target out of reach', 'strafe route blocked', 'route blocked']).has(run.reason ?? '')) return;
   return previousPlanFeedback(run, current);
 }

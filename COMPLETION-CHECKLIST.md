@@ -886,3 +886,44 @@ sustained performance remain open.
 
 Final validation: 481 application tests, type checking and the bridge/Doom/chess
 build passed. Live VM/model checks were not run under the stop constraint.
+
+
+### Melee movement and stale attack recovery (2026-09-19)
+
+Motor aim assistance treated fists/chainsaw like ranged guns. In a reproduced
+local-WASM opening state, a fist-equipped player with its nearest enemy 484.93
+units away requested left+forward but received only fire. Comparing the unchanged
+controller from `864ddc6` with the correction over the next 35 actual engine ticks:
+
+| Observed input/result | Before | After |
+| --- | --- | --- |
+| Forward-input ticks | 0 | 35 |
+| Fire-input ticks while every observed enemy was beyond 64 units | 35 | 0 |
+| Position displacement | 164.59 | 212.32 |
+| Heading change | 0 degrees | 114.26 degrees |
+| Kills / health change | 0 / 0 | 0 / 0 |
+
+The old player still moved through inertia; the defect was cancelling requested
+movement and punching out of range, not a stopped engine. The fixed input here
+was scripted, not selected by Jev. Evidence:
+`artifacts/melee-reach/2026-09-19/comparison.json`.
+
+The motor now applies the pinned engine’s 64-unit melee range plus known enemy
+radii and the existing vertical guard before arresting movement or adding fire.
+Unknown types fall back to center distance. Large monsters remain eligible at
+body contact; exact intercept geometry and engine line of sight remain unknown.
+A target leaving reach ends the attack promptly
+with `melee target out of reach`, included in existing failed-plan feedback and
+supervisor escalation. It does not automatically chase or change the user's goal.
+Current decision/preparation context includes the derived reach check.
+
+A separate actual-input WASM case equipped fists, approached for 143 ticks,
+then used the offered engage plan: one kill, no health loss, completion after 36
+ticks. Synthetic tests cover chainsaw/ranged/legacy behavior, vertical and wall
+exclusions, moving targets, automatic weapon changes and exact failure feedback.
+No live VM/model was started and no saved session was changed. Real-room escape,
+autonomous supervisor quality and sustained gameplay measurements remain open.
+
+Final validation: all 487 application tests, type checking and the
+bridge/Doom/chess build passed. The final controller reproduced the recorded
+after-result exactly. Live VM/model checks remain unrun under the stop constraint.

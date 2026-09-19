@@ -7,7 +7,7 @@ import { weaponHasAmmo, weaponInput } from './doom-weapons.ts';
 import type { GameState, Input, Weapon } from '../../contracts/src/game.ts';
 import type { PlanView } from '../../contracts/src/session.ts';
 import type { DoomMap } from './doom-geometry.ts';
-import { plausibleRangedTarget } from './doom-targeting.ts';
+import { isMeleeWeapon, plausibleRangedTarget, withinMeleeReach } from './doom-targeting.ts';
 import { defaultDoomMotorPolicy, type DoomMotorPolicy } from './doom-motor-policy.ts';
 import { defaultDoomExecutionPolicy, type DoomExecutionPolicy } from './doom-execution-policy.ts';
 
@@ -30,7 +30,7 @@ const attack = (target: PlanTarget): PlanStep => ({ kind: 'attack', target, labe
 
 export function candidatePlans(state: GameState, map: DoomMap, visited?: string[], pickups?: PickupMemory): GamePlan[] {
   const plans: GamePlan[] = [];
-  const melee = ['fist', 'chainsaw'].includes(state.weapon ?? '');
+  const melee = isMeleeWeapon(state.weapon);
   const enemy = state.enemies.find(e => e.distance < 768 && plausibleRangedTarget(state, e, map)
     && (!melee || Math.abs(e.position.z - state.z) < 56)
     && state.enemies.filter(other => other.engineType === e.engineType && distance(other.position, e.position) < 8).length === 1);
@@ -102,11 +102,11 @@ export function weaponPlans(state: GameState, map: DoomMap): GamePlan[] {
   if (!state.weaponSelection || state.pendingWeapon || !state.weapons) return [];
   const enemy = state.enemies.find(e => e.distance < 768 && plausibleRangedTarget(state, e, map)
     && state.enemies.filter(other => other.engineType === e.engineType && distance(other.position, e.position) < 8).length === 1);
-  const stranded = ['fist', 'chainsaw'].includes(state.weapon ?? '') || !weaponHasAmmo(state);
+  const stranded = isMeleeWeapon(state.weapon) || !weaponHasAmmo(state);
   if (!enemy && !stranded) return [];
   return state.weapons.filter(weapon => weapon !== state.weapon && weaponInput(state, weapon) && weaponHasAmmo(state, weapon))
     .flatMap(weapon => {
-      const melee = weapon === 'fist' || weapon === 'chainsaw';
+      const melee = isMeleeWeapon(weapon);
       // Do not propose downgrading to melee while a loaded ranged weapon works.
       if (melee && weaponHasAmmo(state)) return [];
       const target: PlanTarget = { kind: 'point', x: state.x, y: state.y, z: state.z };
@@ -165,6 +165,9 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
     }
     if (target.kind !== 'point' && map?.sight(state, target) === 'solid-wall-blocked') return stopPlan(run, 'replan', 'target became obstructed');
     if ((step.kind === 'attack' || step.kind === 'strafeAttack') && !canAttack(state)) return stopPlan(run, 'replan', 'weapon needs ammunition');
+    if ((step.kind === 'attack' || step.kind === 'strafeAttack') && isMeleeWeapon(state.weapon) && !withinMeleeReach(state, target, target.engineType)) {
+      return stopPlan(run, 'replan', 'melee target out of reach');
+    }
     const bearing = bearingTo(state, target);
     // Combat alignment and the motor's fire gate must use the same decision
     // policy; otherwise the plan stops turning where the motor refuses to fire.

@@ -225,3 +225,20 @@ navigation and interaction alignment keep their existing rules. Historical polic
 records retain their original values and hashes; the behavioral correction belongs
 to this gameplay build and requires the usual explicit build handoff for saved
 supervised runs.
+
+
+### Melee reach
+
+Motor assistance now distinguishes fists/chainsaw from ranged weapons. It keeps
+requested movement when an enemy is too far away for melee instead of cancelling
+movement to attack. If a tracked enemy leaves melee reach during an attack, the
+plan asks for a new decision and supplies that failure to background supervision.
+Jev and generated-planner feedback include `withinMeleeReach` alongside distance,
+height, weapon and ammunition.
+
+The range check uses the pinned engine’s 64-unit melee range plus the known
+enemy radius and the existing vertical guard. Unknown actor types use center
+distance. Exact intercept geometry and engine line of sight are not exposed,
+so this is not proof that a hit will land. Geometry still excludes blocked shots.
+Close-range fist attacks remain tested against the local engine; this correction
+does not establish live model performance or general combat strength.

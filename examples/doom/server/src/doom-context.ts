@@ -2,6 +2,7 @@ import type { GameState } from '../../contracts/src/game.ts';
 import type { EntityObservation } from '../../contracts/src/entity.ts';
 import type { DoomMap } from './doom-geometry.ts';
 import type { Experience } from './experience.ts';
+import { withinMeleeReach } from './doom-targeting.ts';
 
 // Engine enum identities, not visual classifications. wasmdoom dd321b50
 // info.h/info.c and d_items.c; Freedoom replaces artwork, not these mechanics.
@@ -28,7 +29,7 @@ export function groundedState(state: GameState, objective: string, history: Game
     kind: e.kind === 'pickup' ? pickups[e.engineType] ?? `pickup type ${e.engineType}` : e.kind === 'enemy' ? enemyKinds[e.engineType] ?? `enemy type ${e.engineType}` : `projectile type ${e.engineType}`,
     sight: map?.sight(state, e.position) ?? 'unknown',
     distance: round(e.distance), leftDegrees: round(e.relativeBearing), heightDifference: round(e.position.z - state.z),
-    ...(e.kind === 'enemy' ? { health: e.health } : {}),
+    ...(e.kind === 'enemy' ? { health: e.health, withinMeleeReach: withinMeleeReach(state, e.position, e.engineType) } : {}),
     ...(e.kind === 'projectile' ? { headingTowardPlayer: round(e.towardPlayerAlignment) } : {}),
   });
   const input = {
@@ -42,7 +43,7 @@ export function groundedState(state: GameState, objective: string, history: Game
     projectiles: state.projectiles.slice(0, 6).map(entity),
     pickups: state.pickups.slice(0, 6).map(entity),
     attempts: experience.slice(0, 3).map(e => ({ action: e.action, result: e.result })),
-    limits: 'Nearby engine observations, NOT line of sight or reachable paths. Walls, floors and doors can separate objects. Positive leftDegrees means left; negative means right; 0 means ahead; +/-180 behind. Shooting fires ahead without turning; turning does not shoot. Strafing moves sideways without changing aim. Projectiles heading toward you may miss or hit walls. Unknown weapon is not evidence of usable ammo. Attempts are nearby past outcomes, not guarantees.',
+    limits: 'Nearby engine observations, NOT line of sight or reachable paths. Walls, floors and doors can separate objects. Positive leftDegrees means left; negative means right; 0 means ahead; +/-180 behind. Shooting fires ahead without turning; turning does not shoot. Strafing moves sideways without changing aim. Projectiles heading toward you may miss or hit walls. withinMeleeReach checks close-range geometry only, not line of sight. Fists and chainsaw cannot attack distant enemies. Unknown weapon is not evidence of usable ammo. Attempts are nearby past outcomes, not guarantees.',
   };
   while (JSON.stringify(input).length > 4800 && input.attempts.length) input.attempts.pop();
   return input;
@@ -71,7 +72,7 @@ export const spatialInstructions = {
 export function tacticalState(state: GameState, objective: string, history: GameState[], map: DoomMap, actionTicks: number, experience: Experience[] = []) {
   const previous = history.find(s => s.tick < state.tick && s.map === state.map && s.episode === state.episode);
   const candidates = state.enemies.filter(e => map.sight(state, e.position) !== 'solid-wall-blocked');
-  const target = (e: EntityObservation) => ({ ...(map.dynamicUncertain ? { visibility: map.sight(state, e.position) } : {}), kind: e.kind === 'pickup' ? pickups[e.engineType] ?? 'pickup' : enemyKinds[e.engineType] ?? 'enemy', ...(e.kind === 'enemy' ? { health: e.health } : {}), distance: Math.round(e.distance), bearing: Math.round(e.relativeBearing), heightDifference: Math.round(e.position.z - state.z) });
+  const target = (e: EntityObservation) => ({ ...(map.dynamicUncertain ? { visibility: map.sight(state, e.position) } : {}), kind: e.kind === 'pickup' ? pickups[e.engineType] ?? 'pickup' : enemyKinds[e.engineType] ?? 'enemy', ...(e.kind === 'enemy' ? { health: e.health, withinMeleeReach: withinMeleeReach(state, e.position, e.engineType) } : {}), distance: Math.round(e.distance), bearing: Math.round(e.relativeBearing), heightDifference: Math.round(e.position.z - state.z) });
   const geometry = map.observe(state);
   const rays = geometry.staticBarrierDistance;
   const clearance = Object.fromEntries(Object.entries({ ahead: 0, behind: 180, left: 90, right: -90 }).map(([key, angle]) => [key, map.clearance(state, state.angle + angle)])) as Record<'ahead' | 'behind' | 'left' | 'right', number>;
@@ -86,7 +87,7 @@ export function tacticalState(state: GameState, objective: string, history: Game
     blockedEnemyCount: state.enemies.length - candidates.length,
     nearbyPickups: state.pickups.filter(e => map.sight(state, e.position) !== 'solid-wall-blocked' && Math.abs(e.position.z - state.z) <= 24).slice(0, 3).map(target),
     experience: experience.slice(0, 2).map(e => ({ action: e.action, result: e.result })),
-    units: 'World units and degrees. Bearing 0 ahead, +90 left, -90 right, +/-180 behind. Player radius 16. Static walls block shots. Door/floor openings and actor collisions unknown. Barrier distance caps at 512. Only consider unblocked targets. Ray clearance does not guarantee movement.',
+    units: 'World units and degrees. Bearing 0 ahead, +90 left, -90 right, +/-180 behind. Player radius 16. Static walls block shots. Door/floor openings and actor collisions unknown. Barrier distance caps at 512. Only consider unblocked targets. Ray clearance does not guarantee movement. withinMeleeReach is a conservative range check for fists/chainsaw, not proof of a hit.',
   };
 }
 export const tacticalInstructions = {

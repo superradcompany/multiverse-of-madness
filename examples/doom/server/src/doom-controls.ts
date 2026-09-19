@@ -1,7 +1,7 @@
 import { weaponInputs } from '../../contracts/src/game.ts';
 import type { GameState, Input } from '../../contracts/src/game.ts';
 import type { DoomMap } from './doom-geometry.ts';
-import { plausibleRangedTarget } from './doom-targeting.ts';
+import { plausibleAttackTarget } from './doom-targeting.ts';
 import { defaultDoomMotorPolicy, type DoomMotorPolicy } from './doom-motor-policy.ts';
 
 // Motor assistance, not a model judgment or a simulated future. Rechecked from
@@ -9,7 +9,7 @@ import { defaultDoomMotorPolicy, type DoomMotorPolicy } from './doom-motor-polic
 export function doomInputs(state: GameState, requested: Input[], map: DoomMap, stopOnTarget = true, motor: Readonly<DoomMotorPolicy> = defaultDoomMotorPolicy): Input[] {
   if (!requested.length) return [];
   if (requested.some(input => (weaponInputs as readonly string[]).includes(input))) return requested.filter(input => input !== 'fire');
-  const candidates = state.enemies.filter(e => plausibleRangedTarget(state, e, map));
+  const candidates = state.enemies.filter(e => plausibleAttackTarget(state, e, map));
   const aligned = candidates.some(e => Math.abs(e.relativeBearing) <= motor.aimToleranceDegrees);
   let inputs = [...requested];
   const turning = inputs.includes('left') ? 1 : inputs.includes('right') ? -1 : 0;
