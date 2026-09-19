@@ -51,13 +51,15 @@ test('edits during a judgment keep the requested trial budget and distinguish ro
   const response = new Promise<void>(resolve => { release = resolve; });
   const session = new Session({ decide: async () => { entered(); await response; return structuredClone(decision); } }, options);
   await session.initialize(new Runtime('root')); session.step(); await waiting;
-  session.setTrialDuration(70); session.setForkThreshold(0.1);
+  session.setTrialDuration(70); session.setForkThreshold(0.1); session.setStallForkSeconds(4);
   release(); await session.idle();
   assert.equal(session.snapshot().error, undefined);
   const saved = session.checkpoint(), selected = saved.view.decision!;
   assert.notDeepEqual(selected.policyRevision, selected.routingPolicyRevision);
   const asked = saved.policies!.find(entry => entry.revision.version === selected.policyRevision!.version)!.policy.values;
   const routed = saved.policies!.find(entry => entry.revision.version === selected.routingPolicyRevision!.version)!.policy.values;
+  assert.equal(asked.stallForkSeconds, undefined); assert.equal(routed.stallForkSeconds, 4);
+  assert.equal(selected.stallForkSeconds, 4);
   assert.equal(asked.forkThreshold, 0.75); assert.equal(routed.forkThreshold, 0.1);
   assert.equal(asked.trialTicks, 7); assert.equal(routed.trialTicks, 7);
   assert.equal(saved.view.trialDurationTicks, 70);

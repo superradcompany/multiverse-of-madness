@@ -27,7 +27,7 @@ import type { CheckpointAdapter } from './checkpoints.ts';
 import { ExperienceMemory, type Experience } from './experience.ts';
 import { EventEmitter } from 'node:events';
 import type { GameState, Input } from '../../contracts/src/game.ts';
-import type { RecoveryPolicy, SessionView, WorldView } from '../../contracts/src/session.ts';
+import { defaultStallForkSeconds, type RecoveryPolicy, type SessionView, type WorldView } from '../../contracts/src/session.ts';
 import type { WorldRuntime } from './runtime.ts';
 import { actions, type ActionId, type DecisionMaker, type JevDecisionTrace, type Decision, type DecisionContext, type Priority } from './jev.ts';
 
@@ -260,7 +260,7 @@ export class Session extends EventEmitter {
       continue: async (world, signal) => { await this.advancePlan(world, Math.max(0, world.plan!.untilTick - world.view.state.tick), signal); },
       limits: () => ({ breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches, horizon: this.view.trialDurationTicks ?? this.options.horizon, actionTicks: this.decisionTicks() }),
       decide: (world, limits, signal) => this.judge(world, limits, signal),
-      routing: world => ({ threshold: this.view.forkThreshold ?? this.options.threshold, stalled: world.view.state.tick - world.stats.lastProgressTick >= 350, retries: this.recovery.failures }),
+      routing: world => ({ threshold: this.view.forkThreshold ?? this.options.threshold, stalled: world.view.state.tick - world.stats.lastProgressTick >= (this.view.stallForkSeconds ?? defaultStallForkSeconds) * 35, retries: this.recovery.failures }),
       execute: (world, judgment, limits, signal) => this.executeDecision(world, judgment, limits, signal),
     },
     comparison: {
@@ -738,6 +738,11 @@ export class Session extends EventEmitter {
     this.rememberOverride({ forkThreshold: threshold });
     this.view.forkThreshold = threshold; this.emitView();
   }
+  setStallForkSeconds(seconds: number) {
+    if (!Number.isInteger(seconds) || seconds < 1 || seconds > 120) throw new Error('Stalled comparison interval must be 1–120 game seconds');
+    this.rememberOverride({ stallForkSeconds: seconds });
+    this.view.stallForkSeconds = seconds; this.emitView();
+  }
   configureMemory(capacity: number, perDecision: number) {
     if (!Number.isInteger(perDecision) || perDecision < 1 || perDecision > 8) throw new Error('Decision memory limit must be 1–8 attempts');
     if (!Number.isInteger(capacity) || capacity < 8 || capacity > 1024) throw new Error('Memory capacity must be 8–1024');
@@ -793,7 +798,7 @@ export class Session extends EventEmitter {
   private controlPolicy(): DoomPolicy {
     const learned = this.revisions ? learningDoomPolicy(this.revisions.current().artifact, this.userOverrides).policy.values : undefined;
     const outcomeWeights = learned?.outcomeWeights, execution = learned?.execution, motor = learned?.motor;
-    return { ...(outcomeWeights ? { outcomeWeights } : {}), ...(execution ? { execution } : {}), ...(motor ? { motor } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
+    return { ...(this.view.stallForkSeconds !== undefined ? { stallForkSeconds: this.view.stallForkSeconds } : {}), ...(outcomeWeights ? { outcomeWeights } : {}), ...(execution ? { execution } : {}), ...(motor ? { motor } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
       trialTicks: this.view.trialDurationTicks ?? this.options.horizon, decisionTicks: this.view.decisionIntervalTicks ?? 35,
       ...(this.view.decisionIntervalMode ? { decisionIntervalMode: this.view.decisionIntervalMode } : {}),
       planningMode: this.view.planningMode ?? 'plans', winnerDelaySeconds: this.view.winnerDelaySeconds ?? 0,
@@ -831,6 +836,7 @@ export class Session extends EventEmitter {
     const { artifact, activation } = this.revisions.current(); doomLearningProvenance(this.revisions, activation, artifact);
     this.validateLearningRevision(artifact);
     const policy = cappedLearningDoomPolicy(artifact, this.userOverrides, this.view.maxFutures ?? this.options.branches).policy.values;
+    this.view.stallForkSeconds = policy.stallForkSeconds;
     this.view.forkThreshold = policy.forkThreshold; this.view.effectiveFutures = policy.breadth;
     this.view.trialDurationTicks = policy.trialTicks; this.view.decisionIntervalTicks = policy.decisionTicks;
     this.view.decisionIntervalMode = policy.decisionIntervalMode;
@@ -1067,7 +1073,7 @@ export class Session extends EventEmitter {
       this.mainId = runtime.id;
       this.goalScopeId = randomUUID();
       this.view = { worlds: [], running: false, busy: true, stage: 'ready',
-        skills: old.view.skills, skillsRevision: old.view.skillsRevision, forkThreshold: old.view.forkThreshold, maxFutures: old.view.maxFutures, planningMode: old.view.planningMode, winnerDelaySeconds: old.view.winnerDelaySeconds, decisionIntervalTicks: old.view.decisionIntervalTicks, decisionIntervalMode: old.view.decisionIntervalMode, trialDurationTicks: old.view.trialDurationTicks, objective: old.view.pendingObjective ?? old.view.objective, commentary: [] };
+        skills: old.view.skills, skillsRevision: old.view.skillsRevision, forkThreshold: old.view.forkThreshold, stallForkSeconds: old.view.stallForkSeconds, maxFutures: old.view.maxFutures, planningMode: old.view.planningMode, winnerDelaySeconds: old.view.winnerDelaySeconds, decisionIntervalTicks: old.view.decisionIntervalTicks, decisionIntervalMode: old.view.decisionIntervalMode, trialDurationTicks: old.view.trialDurationTicks, objective: old.view.pendingObjective ?? old.view.objective, commentary: [] };
       this.recovery = { ...newRecovery(), policy: old.recovery.policy, cleanup: [...old.recovery.cleanup, ...old.recovery.points.map(p => p.reference)] };
       this.attempts = newAttempts(); this.recentPlanFailures = [];
       this.memory = new ExperienceMemory(old.memory.capacity); this.memoryUsed = 0; this.memoryEvidence = [];
@@ -1237,7 +1243,7 @@ export class Session extends EventEmitter {
     this.view.routing ??= { direct: 0, uncertain: 0, manual: 0 };
     this.view.routing[mode] = (this.view.routing[mode] ?? 0) + 1;
     this.view.comparison = undefined;
-    this.view.decision = { preparation: decision.preparation, learning: judgment.data.learning, policyRevision: judgment.data.policy.revision, routingPolicyRevision: this.capturePolicy(limits.actionTicks, limits.horizon).revision, candidateCount: judgment.candidates.length, futureLimit: limits.breadth, kind: decision.plans ? 'plan' : 'action', action: selectedPlan?.label ?? actions[decision.action].label, mode, threshold, evidence: decision.evidence,
+    this.view.decision = { stallForkSeconds: this.view.stallForkSeconds ?? defaultStallForkSeconds, preparation: decision.preparation, learning: judgment.data.learning, policyRevision: judgment.data.policy.revision, routingPolicyRevision: this.capturePolicy(limits.actionTicks, limits.horizon).revision, candidateCount: judgment.candidates.length, futureLimit: limits.breadth, kind: decision.plans ? 'plan' : 'action', action: selectedPlan?.label ?? actions[decision.action].label, mode, threshold, evidence: decision.evidence,
       perception: decision.perception, sourceId: main.view.id, tick: main.view.state.tick, latencyMs: decision.latencyMs, waitMs: decision.waitMs, prefetched: decision.prefetched,
       preferences: allCandidates.map(candidate => ({ action: candidate.label, probability: candidate.probability, tested: mode !== 'direct' && candidates.includes(candidate) })),
     };
@@ -1258,7 +1264,7 @@ export class Session extends EventEmitter {
     const { decision } = judgment.data;
     const { horizon, actionTicks } = limits;
     const { mode, threshold } = this.view.decision!;
-    this.say(main.view.id, mode === 'manual' ? 'You requested a comparison. Testing alternate approaches from this moment.' : mode === 'stalled' ? 'No useful progress for 10 game seconds. Testing alternatives despite model confidence.' : `Jev confidence ${Math.round(decision.confidence * 100)}%, below the ${Math.round(threshold * 100)}% threshold. Testing alternate actions.`);
+    this.say(main.view.id, mode === 'manual' ? 'You requested a comparison. Testing alternate approaches from this moment.' : mode === 'stalled' ? `No useful progress for ${this.view.decision!.stallForkSeconds ?? defaultStallForkSeconds} game seconds. Testing alternatives despite model confidence.` : `Jev confidence ${Math.round(decision.confidence * 100)}%, below the ${Math.round(threshold * 100)}% threshold. Testing alternate actions.`);
     this.emitView();
     const generation = main.view.generation + 1;
     const batchId = randomUUID().replaceAll('-', '').slice(0, 16);

@@ -1,4 +1,4 @@
-import type { SessionView } from '../../contracts/src/session.ts';
+import { defaultStallForkSeconds, type SessionView } from '../../contracts/src/session.ts';
 
 export function DecisionSettings({ session, command }: { session: SessionView; command: (body: Record<string, unknown>) => Promise<unknown> }) {
   const capacity = session.experience?.capacity ?? 128, perDecision = session.experience?.contextLimit ?? 2;
@@ -8,7 +8,10 @@ export function DecisionSettings({ session, command }: { session: SessionView; c
     <p>The supervisor can choose fewer futures within this cap. The next decision targets {session.effectiveFutures ?? session.maxFutures ?? 4}, up to the number of valid plans. Larger batches use more memory and model calls.</p>
     <label htmlFor="fork-threshold">fork below {Math.round((session.forkThreshold ?? .75) * 100)}% confidence</label>
     <input id="fork-threshold" aria-label="Fork confidence threshold" type="range" min="0" max="100" step="1" value={Math.round((session.forkThreshold ?? .75) * 100)} onChange={e => void command({ type: 'fork-threshold', threshold: Number(e.target.value) / 100 })} />
-    <p>Higher values test more alternatives. No useful progress for 10 game seconds also triggers a comparison, regardless of confidence.</p>
+    <p>Higher values test more alternatives.</p>
+    <label htmlFor="stall-fork">compare after {session.stallForkSeconds ?? defaultStallForkSeconds}s without progress</label>
+    <input id="stall-fork" aria-label="Seconds without progress before comparing futures" type="range" min="1" max="120" step="1" value={session.stallForkSeconds ?? defaultStallForkSeconds} onChange={e => void command({ type: 'stall-fork', seconds: Number(e.target.value) })} />
+    <p>At the next decision, compare alternatives regardless of confidence. The supervisor can adjust this; your edits override it.</p>
     <label htmlFor="memory-capacity">remember up to</label>
     <select id="memory-capacity" value={capacity} onChange={e => void command({ type: 'memory-settings', capacity: Number(e.target.value), perDecision })}>{[...new Set([8, 16, 32, 64, 128, 256, 512, 1024, capacity])].sort((a, b) => a - b).map(n => <option key={n} value={n}>{n} attempts</option>)}</select>
     <label htmlFor="memory-context">use per decision</label>

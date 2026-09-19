@@ -245,6 +245,21 @@ The stopped demo's 113 historical policy records still verify unchanged. The new
 motor field requires the updated host; older hosts reject it instead of silently
 using different controls.
 
+Stalled-routing policy (2026-09-19): the fixed ten-second comparison trigger is
+now an optional versioned `stallForkSeconds` field (1–120 game seconds). Qualified
+supervisor changes apply at decision boundaries; explicit user settings win and
+survive new games, restart and revision rollback. The UI exposes the current value
+and retains the threshold used by historical decisions. Omitted fields preserve
+the ten-second behavior and original hashes; all 113 retained historical policies
+verified unchanged. Controlled tests cover the exact routing boundary, actual
+fork counts, user precedence, mid-judgment edits and proposal publication. The
+progress definition and independent acceptance metrics remain host-owned. This
+does not establish better room escape or finish the remaining strategic surface.
+No stopped session or VM was started or upgraded. Older hosts refuse the new
+policy field; saved supervised games require the explicit build handoff before
+using it. Validation passed: 468 application tests, four web tests, type checking
+and the production build.
+
 ## 4. Prove that automatic learning helps during real play
 
 - [x] Capture the live problem at a safe boundary, freeze proposal evidence, and

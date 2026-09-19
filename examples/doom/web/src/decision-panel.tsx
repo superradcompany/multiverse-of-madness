@@ -1,4 +1,4 @@
-import type { SessionView } from '../../contracts/src/session.ts';
+import { defaultStallForkSeconds, type SessionView } from '../../contracts/src/session.ts';
 
 export function DecisionPanel({ session }: { session: SessionView }) {
   const decision = session.decision;
@@ -15,7 +15,7 @@ export function DecisionPanel({ session }: { session: SessionView }) {
       <span style={{ width: `${confidence}%` }} /><i style={{ left: `${threshold}%` }} />
     </div>
     </summary>
-    <div className="decision-expanded"><p>{decision.mode === 'manual' ? 'Manual comparison · confidence rule bypassed.' : decision.mode === 'stalled' ? 'No useful progress for 10 game seconds → test alternatives.' : branching ? 'Below the threshold → test alternatives.' : 'At or above the threshold → act directly.'}</p>
+    <div className="decision-expanded"><p>{decision.mode === 'manual' ? 'Manual comparison · confidence rule bypassed.' : decision.mode === 'stalled' ? `No useful progress for ${decision.stallForkSeconds ?? defaultStallForkSeconds} game seconds → test alternatives.` : branching ? 'Below the threshold → test alternatives.' : 'At or above the threshold → act directly.'}</p>
     <p className="decision-note">{decision.kind === 'plan' && decision.preparation?.planIds.length ? 'The supervisor’s planner generated these options from the game state. Jev ranked them.' : decision.kind === 'plan' ? 'The built-in planner generated these options from the game state. Jev ranked them.' : 'Jev ranked the built-in movement and shooting actions. Multi-step plans are disabled.'}</p>
     <p className="decision-note">Preference certainty, not survival odds · {threshold.toFixed(0)}% is an uncalibrated routing threshold.</p>
     <details key={`${decision.sourceId}-${decision.tick}`}>

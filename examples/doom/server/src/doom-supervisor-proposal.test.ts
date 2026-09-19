@@ -147,11 +147,14 @@ test('supervisor execution settings become a candidate artifact without changing
     const original = f.session.learningPolicy();
     const execution = { ...defaultDoomExecutionPolicy, blockedAfterTicks: 14, damageBeforeReplan: 4 };
     const motor = { ...defaultDoomMotorPolicy, stalledTicks: 3 };
-    f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution, motor } });
+    f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution, motor, stallForkSeconds: 3 } });
     const result = await f.run();
     assert.equal(result.status, 'submitted');
     assert.deepEqual(result.candidate!.policy.execution, execution);
     assert.deepEqual(result.candidate!.policy.motor, motor);
+    assert.equal(result.candidate!.policy.stallForkSeconds, 3);
+    assert.match(result.request.task, /policy.stallForkSeconds/);
+    assert.deepEqual(result.request.evidence.observations.routing, { stallForkSeconds: 10, forkThreshold: .75 });
     assert.deepEqual(f.session.learningPolicy(), original);
     await f.reopen();
     assert.deepEqual((await f.run()).candidate!.policy.execution, execution);

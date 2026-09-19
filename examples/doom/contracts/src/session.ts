@@ -48,6 +48,8 @@ export interface SessionView {
   skills?: AiSkill[];
   skillsRevision?: number;
   forkThreshold?: number;
+  /** Game time without selected-path progress before forcing a comparison. */
+  stallForkSeconds?: number;
   maxFutures?: number;
   /** Supervisor-requested breadth, bounded by maxFutures and available candidates. */
   effectiveFutures?: number;
@@ -64,7 +66,7 @@ export interface SessionView {
   commentary: Commentary[];
   error?: string;
   confidence?: number;
-  decision?: { learning?: LearningProvenance; policyRevision?: VersionRef; routingPolicyRevision?: VersionRef; candidateCount?: number; futureLimit?: number; kind?: 'plan' | 'action'; action: string; mode: 'direct' | 'uncertain' | 'manual' | 'stalled'; threshold: number;
+  decision?: { learning?: LearningProvenance; policyRevision?: VersionRef; routingPolicyRevision?: VersionRef; candidateCount?: number; futureLimit?: number; kind?: 'plan' | 'action'; action: string; stallForkSeconds?: number; mode: 'direct' | 'uncertain' | 'manual' | 'stalled'; threshold: number;
     preparation?: { revision: VersionRef; historyIndices: number[]; experienceIndices: number[]; features: Record<string, string | number | boolean>; planIds: string[] };
     sourceId?: string; tick?: number; latencyMs?: number; waitMs?: number; prefetched?: boolean;
     evidence?: { skills?: Array<Omit<AiSkill, "enabled">>; objective: string; stats: { current: { health: number; armor: number; mapKills: number }; route: { kills: number; gameSeconds: number; exploredCells: number }; progress: { secondsWithoutProgress: number } }; experienceUsed: number };
@@ -83,3 +85,6 @@ export interface SessionView {
   directorWorldIds?: string[];
   comparison?: { candidateIds: string[]; bestId: string; reason: string; selected: boolean };
 }
+
+/** Historical routing default; omitted policy fields retain this behavior. */
+export const defaultStallForkSeconds = 10;

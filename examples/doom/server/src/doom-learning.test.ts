@@ -335,3 +335,63 @@ test('supervisor breadth changes within the user cap, survives restart, and gove
     await f.step(); assert.equal(f.session.checkpoint().experiments.length, 2);
   } finally { await f.cleanup(); }
 });
+
+async function automaticDecision(session: Session) {
+  let began = false;
+  const stop = (view: ReturnType<Session['snapshot']>) => {
+    if (view.stage === 'deciding') began = true;
+    if (began && (view.stage === 'choosing' || view.stage === 'ready')) void session.pause();
+  };
+  session.on('change', stop);
+  try { session.resume(); await session.idle(); assert.equal(session.snapshot().error, undefined); }
+  finally { session.off('change', stop); await session.pause(); }
+}
+
+test('supervised stagnation timing changes actual routing and survives restart and revision rollback', async () => {
+  const f = await fixture(false, new Runtime('root', { ...initial, tick: 1000 }));
+  try {
+    f.hooks.decision = { ...decision, confidence: 1 };
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, stallForkSeconds: 3 } };
+    await f.propose('stall', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('stall'); assert.equal(f.session.snapshot().stallForkSeconds, 3);
+    const start = f.session.checkpoint();
+    for (const elapsed of [104, 105]) {
+      const saved = structuredClone(start); saved.worlds[0]!.stats!.lastProgressTick = 1000 - elapsed;
+      await f.reopen(saved); await automaticDecision(f.session);
+      const view = f.session.snapshot(), record = f.session.checkpoint();
+      assert.equal(view.decision!.mode, elapsed === 104 ? 'direct' : 'stalled');
+      assert.equal(record.experiments.length, elapsed === 104 ? 0 : 2);
+      assert.equal(view.decision!.stallForkSeconds, 3);
+      assert.equal(record.policies!.find(policy => policy.revision.version === view.decision!.routingPolicyRevision!.version)!.policy.values.stallForkSeconds, 3);
+      if (elapsed === 105) assert.ok(view.commentary.some(item => item.text.includes('3 game seconds')));
+    }
+    await f.promote(); await f.controller.rollback(f.baseline.revision, 'Restore historical routing timing');
+    assert.equal(f.session.snapshot().stallForkSeconds, undefined);
+    const saved = f.session.checkpoint(); saved.worlds.find(world => world.view.id === saved.view.mainId)!.stats!.lastProgressTick = main(f.session).state.tick - 105;
+    await f.reopen(saved); await automaticDecision(f.session);
+    assert.equal(f.session.snapshot().decision!.mode, 'direct');
+    assert.equal(f.session.snapshot().decision!.stallForkSeconds, 10);
+    assert.equal(f.session.learningPolicy().stallForkSeconds, undefined, 'historical policies do not acquire a new hash field');
+  } finally { await f.cleanup(); }
+});
+
+test('a user stagnation override survives supervised activation, reconnect, rollback and new game', async () => {
+  const f = await fixture();
+  try {
+    f.session.setStallForkSeconds(20);
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, stallForkSeconds: 3 } };
+    await f.propose('stall', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('stall'); await f.save(); await f.reopen();
+    assert.equal(f.session.learningPolicy().stallForkSeconds, 20); assert.equal(f.session.checkpoint().learning!.overrides.stallForkSeconds, 20);
+    await f.controller.rollback(f.baseline.revision, 'Keep user setting while restoring strategy');
+    await f.session.restart(async () => new Runtime('fresh-stall'), async () => {});
+    assert.equal(f.session.snapshot().stallForkSeconds, 20); assert.equal(f.session.learningPolicy().stallForkSeconds, 20);
+    for (const value of [0, 121, 1.5, NaN, Infinity]) {
+      assert.throws(() => f.session.setStallForkSeconds(value), /1–120/);
+      assert.throws(() => parseDoomLearningPolicy({ ...fields.policy, stallForkSeconds: value }));
+    }
+    assert.equal(f.session.snapshot().stallForkSeconds, 20);
+  } finally { await f.cleanup(); }
+});

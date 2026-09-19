@@ -9,6 +9,7 @@ const settings = z.strictObject({
   motor: doomMotorPolicySchema.optional(),
   execution: doomExecutionPolicySchema.optional(),
   outcomeWeights: doomOutcomeWeightsSchema.optional(),
+  stallForkSeconds: z.number().int().min(1).max(120).optional(),
   forkThreshold: z.number().min(0).max(1),
   breadth: z.number().int().min(1).max(10),
   trialTicks: z.number().int().positive(),

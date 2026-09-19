@@ -107,6 +107,7 @@ const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('skill-toggle'), id: z.string().uuid(), enabled: z.boolean() }),
   z.object({ type: z.literal('skill-delete'), id: z.string().uuid() }),
   z.object({ type: z.literal('max-futures'), count: z.number().int().min(2).max(10) }),
+  z.object({ type: z.literal('stall-fork'), seconds: z.number().int().min(1).max(120) }),
   z.object({ type: z.literal('fork-threshold'), threshold: z.number().min(0).max(1) }),
   z.object({ type: z.literal('memory-settings'), capacity: z.number().int().min(8).max(1024), perDecision: z.number().int().min(1).max(8) }),
   z.object({ type: z.literal('planning-mode'), mode: z.enum(['plans', 'actions']) }),
@@ -231,6 +232,7 @@ handler = async (req, res) => {
           case 'checkpoint-delete': await session.deleteCheckpoint(command.checkpointId); break;
           case 'recovery-policy': { const { type, ...policy } = command; session.setRecoveryPolicy(policy); break; }
           case 'max-futures': session.setMaxFutures(command.count); break;
+          case 'stall-fork': session.setStallForkSeconds(command.seconds); break;
           case 'fork-threshold': session.setForkThreshold(command.threshold); break;
           case 'skill-save': session.saveSkill(command, command.id); break;
           case 'skill-toggle': session.toggleSkill(command.id, command.enabled); break;

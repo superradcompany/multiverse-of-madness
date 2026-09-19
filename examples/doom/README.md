@@ -62,9 +62,11 @@ the backend; the supervisor sees a compact menu. Omitting practice adds no runs.
 
 New proposal records use format 3 to freeze their practice inputs; formats 1 and 2
 remain readable unchanged. Older hosts refuse format 3. Use the explicit build
-upgrade workflow for a saved supervised session. Automatic retirement of archived
-lineage practice checkpoints is not implemented yet. Controlled tests cover this
-integration; live supervisor/VM curriculum qualification remains pending.
+upgrade workflow for a saved supervised session. Background maintenance retires
+unreferenced archived practice snapshots after pending work and resource cleanup
+finish. Current sessions and explicit rollback backups protect their references.
+Controlled tests cover this integration; live supervisor/VM curriculum qualification
+remains pending.
 
 The main world can remain paused while futures explore. A card saying
 **choosing next approach** is waiting for Jev's next decision; it is not the winner
@@ -80,6 +82,7 @@ Playback settings separates these controls:
 | --- | --- |
 | Maximum futures per decision | User resource ceiling, 2–10. The supervisor may choose fewer; the actual batch also depends on valid plans. |
 | Fork below | Confidence threshold, 0–100%. Stalled progress and manual exploration can trigger comparisons independently. |
+| Compare after no progress | Game seconds without selected-route progress before forcing alternatives at a decision boundary. Defaults to 10; the supervisor can adjust 1–120, and your edits override it. Running plans are not interrupted by this setting. |
 | Compare futures after | Game-time trial duration, normally six seconds. Applies to the next batch. |
 | Ask Jev again after | Decision interval for either planning mode; can match the trial duration. Plans may finish or interrupt sooner. |
 | Continue with winner after | Optional review delay, default zero. |
