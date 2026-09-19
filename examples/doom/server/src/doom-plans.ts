@@ -3,7 +3,8 @@ import type { PickupMemory } from './doom-pickup-memory.ts';
 import { interactionPlans, resourcePlans, tacticalPlans, rememberedPickupPlans } from './doom-tactics.ts';
 import { doomPlanPolicy, type PlanFamily } from './doom-plan-policy.ts';
 import { cell } from './run-stats.ts';
-import type { GameState, Input } from '../../contracts/src/game.ts';
+import { weaponHasAmmo, weaponInput } from './doom-weapons.ts';
+import type { GameState, Input, Weapon } from '../../contracts/src/game.ts';
 import type { PlanView } from '../../contracts/src/session.ts';
 import type { DoomMap } from './doom-geometry.ts';
 import { plausibleRangedTarget } from './doom-targeting.ts';
@@ -11,7 +12,8 @@ import { defaultDoomExecutionPolicy, type DoomExecutionPolicy } from './doom-exe
 
 interface Point { x: number; y: number; z: number }
 export interface PlanTarget extends Point { kind: 'point' | 'enemy' | 'pickup'; engineType?: number }
-export interface PlanStep { kind: 'face' | 'move' | 'attack' | 'strafeAttack' | 'use'; direction?: 'strafeLeft' | 'strafeRight'; label: string; target: PlanTarget; within?: number; maxTicks: number }
+export type PlanStep = { label: string; target: PlanTarget; within?: number; maxTicks: number; direction?: 'strafeLeft' | 'strafeRight' } &
+  ({ kind: 'face' | 'move' | 'attack' | 'strafeAttack' | 'use' } | { kind: 'equip'; weapon: Weapon });
 export interface GamePlan { id: string; label: string; steps: PlanStep[]; family?: PlanFamily; evidence?: string; novelty?: number }
 export interface RankedPlan extends GamePlan { probability: number }
 export interface PlanExecution {
@@ -84,13 +86,37 @@ export function candidatePlans(state: GameState, map: DoomMap, visited?: string[
       plans.push({ id: 'withdraw', family: 'cover', label: 'withdraw and face the enemy', steps: [{ ...face(target), label: 'face an escape route' }, { ...move(target), label: 'create distance' }, face({ ...enemy.position, kind: 'enemy', engineType: enemy.engineType })] });
     }
   }
-  const expanded = [...interactionPlans(state, map), ...plans.filter(p => p.family !== 'exploration'),
+  const expanded = [...interactionPlans(state, map), ...weaponPlans(state, map), ...plans.filter(p => p.family !== 'exploration'),
     ...resourcePlans(state, map), ...rememberedPickupPlans(state, map, pickups), ...tacticalPlans(state, map, enemy, canAttack(state)), ...plans.filter(p => p.family === 'exploration')];
   // Keep distinct goals in the model's menu before filling with variants. More
   // candidates do not change the session's independent simultaneous-future cap.
   const families = new Set<PlanFamily | undefined>();
   const first = expanded.filter(p => { if (families.has(p.family)) return false; families.add(p.family); return true; });
   return [...first, ...expanded.filter(p => !first.includes(p))].slice(0, doomPlanPolicy.maxCandidates);
+}
+
+/** Equipment alternatives are grounded in ownership and usable ammunition.
+ * Jev or a generated planner chooses them; the motor never picks a weapon. */
+export function weaponPlans(state: GameState, map: DoomMap): GamePlan[] {
+  if (!state.weaponSelection || state.pendingWeapon || !state.weapons) return [];
+  const enemy = state.enemies.find(e => e.distance < 768 && plausibleRangedTarget(state, e, map)
+    && state.enemies.filter(other => other.engineType === e.engineType && distance(other.position, e.position) < 8).length === 1);
+  const stranded = ['fist', 'chainsaw'].includes(state.weapon ?? '') || !weaponHasAmmo(state);
+  if (!enemy && !stranded) return [];
+  return state.weapons.filter(weapon => weapon !== state.weapon && weaponInput(state, weapon) && weaponHasAmmo(state, weapon))
+    .flatMap(weapon => {
+      const melee = weapon === 'fist' || weapon === 'chainsaw';
+      // Do not propose downgrading to melee while a loaded ranged weapon works.
+      if (melee && weaponHasAmmo(state)) return [];
+      const target: PlanTarget = { kind: 'point', x: state.x, y: state.y, z: state.z };
+      const steps: PlanStep[] = [{ kind: 'equip', weapon, target, label: `equip ${weapon}`, maxTicks: 105 }];
+      if (enemy && !melee) {
+        const actor: PlanTarget = { ...enemy.position, kind: 'enemy', engineType: enemy.engineType };
+        steps.push(face(actor), attack(actor));
+      }
+      return [{ id: `equip_${weapon.replaceAll(' ', '_')}`, family: 'resource' as const,
+        label: `equip ${weapon}${enemy && !melee ? ' and engage' : ''}`, steps }];
+    });
 }
 
 export function startPlan(plan: GamePlan, state: GameState, ticks: number): PlanExecution {
@@ -114,6 +140,17 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
   if (state.enemies.some(e => e.distance < execution.nearbyThreatDistance && map?.sight(state, e.position) !== 'solid-wall-blocked' && !run.started.enemies.some(old => old.engineType === e.engineType && distance(old.position, e.position) < 128))) return stopPlan(run, 'replan', 'new nearby threat');
   while (run.step < run.plan.steps.length) {
     const step = run.plan.steps[run.step]!;
+    if (step.kind === 'equip') {
+      const input = weaponInput(state, step.weapon);
+      if (!input) return stopPlan(run, 'replan', 'weapon selection unsupported or weapon unavailable');
+      if (state.weapon === step.weapon && state.pendingWeapon === null) {
+        run.step++; run.tracked = undefined; run.stepStarted = structuredClone(state); continue;
+      }
+      if (state.tick - run.stepStarted.tick >= step.maxTicks) return stopPlan(run, 'replan', 'weapon switch time limit reached');
+      // Do not hold a toggle key across the switch or fire during the animation.
+      // A later pulse can select the other shotgun after observing the first.
+      return state.pendingWeapon ? [] : [input];
+    }
     let target = run.tracked ?? step.target;
     if (target.kind !== 'point') {
       // The engine has no stable actor IDs. Match nearby same-type observations

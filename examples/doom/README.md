@@ -183,3 +183,28 @@ prior measurements and artifact paths. It is not the current setup guide.
 The example demonstrates experimentation and recovery. Competitive Doom scores,
 reliable autonomous escape from every stuck room, and sustained smooth playback
 under background evaluation are not yet established.
+
+### Weapon selection
+
+New game bridges report owned weapons and pending switches. In **short conditional
+plans** mode, Jev can choose equipment alternatives such as “equip pistol and
+engage.” The controller presses real weapon keys, waits for the engine to report
+the selected weapon, then continues the plan. It does not grant equipment or ammo.
+The eight choices in single-action mode are unchanged.
+
+Supervisor-generated planners can use output `doom-preparation/3` and an `equip`
+step with an observed `weapon`, point `target`, `label`, and bounded `maxTicks`.
+Input `weaponPlans` supplies these alternatives separately; `defaultPlans` stays
+compatible with existing `/1` and `/2` output. Current inventory and switch state
+are included in Jev and supervisor context. Equipment changes remain subject to
+the usual trial duration, danger interruptions and independent evaluation.
+
+Saved detached bridges keep their original controls. New hosts detect this from
+an absent `weaponSelection` capability and refuse unsupported weapon commands
+before dispatch. A prototype-only telemetry upgrade does not enable new HTTP
+inputs. Start a fresh game with the rebuilt bridge to use weapon selection; merely
+refreshing the browser or adopting a new supervisor strategy cannot enable it.
+No saved run is automatically restarted. Fist selection while owning a chainsaw
+is omitted because berserk state is not yet observed. Local WASM tests cover
+pistol/fist switching and one elevated-enemy recovery; advanced weapons and live
+VM/model selection still need qualification.

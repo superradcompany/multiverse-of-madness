@@ -43,7 +43,7 @@ uses 35 game ticks per second. Game time excludes model/network/snapshot latency
 | Control | Current behavior and access | Performance effect / what to inspect |
 | --- | --- | --- |
 | User guide / objective | **Runtime:** Guide the AI, default `survive and reach the exit`; request text capped at 1,000 characters. Applied to all live decision questions. | State a goal and tradeoffs. Contradictory requirements such as rapid progress and zero exposure can encourage avoidance. The guide is an instruction, not an enforced guarantee. |
-| Observation coverage | **Code:** bridge reports health, armor, ammo, equipped weapon, map counters, position, nearby entities; static WAD geometry supplements them. | Missing walls, inventory, affordances or visibility can make sensible choices impossible. Inspect the exact observations before tuning prompts. |
+| Observation coverage | **Code:** bridge reports health, armor, ammo, equipped/pending weapon and owned weapons (new bridges), map counters, position, nearby entities; static WAD geometry supplements them. | Missing walls, inventory, affordances or visibility can make sensible choices impossible. Inspect the exact observations before tuning prompts. |
 | Candidate plan library | **Code:** `doom-plans.ts`, `doom-tactics.ts`; feasibility filters and bounded execution steps. | Determines what the model can attempt. Missing interaction or resupply strategies cannot be fixed by changing confidence. |
 | Candidate menu size / variety | **Code:** `doomPlanPolicy.maxCandidates = 10`; one per available goal family before extra variants. | More coverage can help, but redundant choices consume context and split probabilities. This cap is separate from future count. |
 | Decision style | **Runtime:** plans (default) or single actions. | Plans carry a goal through conditional steps; action mode reasks after a fixed input interval. Compare them under the same budget. |
@@ -75,15 +75,16 @@ Source locations: [session loop](examples/doom/server/src/session.ts),
 ## Plan library and adapter tuning
 
 Jev ranks code-built plans. It does not generate new mechanics or arbitrary routes.
-Each plan has two or three bounded conditional steps. A route may be a prefix;
+Built-in plans use bounded conditional steps. A route may be a prefix;
 finishing it triggers another observation/decision within the same trial budget.
 
 | Plan family | Generated when | Completion / limitation |
 | --- | --- | --- |
 | Engage an enemy | Plausible unblocked target, usable equipped weapon | Face, approach if needed, attack; target tracking is approximate without stable actor IDs. |
+| Change equipped weapon | Observed owned weapon with ammunition, advertised weapon controls, and a combat or resupply reason | Equip through real keys; observe completion before aiming/attacking. Supervisor planner format `/3` can compose equip steps. Older bridges cannot use this capability. |
 | Attack while strafing | Ranged weapon, target at least 64 units away, lateral clearance | Keep moving and correct aim; fire only when aligned. Stop if side clearance disappears or ammo runs out. |
 | Recover health | Useful observed pickup with a plausible direct route | Face and collect; do not assume nearby means reachable. |
-| Resupply / equipment | Useful observed ammo, armor, recovery powerup, or weapon upgrade from basic equipment | Uses resource thresholds. Full weapon ownership is unknown, so upgrade selection is conservative. |
+| Resupply / equipment | Useful observed ammo, armor, recovery powerup, or weapon upgrade from basic equipment | Uses resource thresholds. New inventory avoids redundant weapon-upgrade trips; old bridges retain unknown ownership. |
 | Collect a key | An observed key with a plausible direct route | Collects an observed key as an ordinary candidate. Inventory and nearby lock requirements are supplied as facts; no mandatory key subgoal is assigned. |
 | Interact with a door/switch | Supported static use-line, approachable from its front side | Approach, face and pulse use, then re-observe. Static geometry cannot confirm an already activated switch. Locks without the required key, and dangerous/unsupported specials, are excluded. |
 | Try the exit | Nearby supported normal/secret use-exit line | Approach and use; actual phase/map transition establishes success. This is not a global key/exit solver and does not cover every walk-over exit. |

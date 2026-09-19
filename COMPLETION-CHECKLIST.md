@@ -827,3 +827,27 @@ survived a host restart with unchanged learning journals. Original plain chess i
 unchanged. This completes another-game creation within the selected chess session,
 not the broader cross-game catalog or migration requirements. Evidence:
 `artifacts/chess-new-game/2026-09-18/`.
+
+
+### Owned-weapon execution coverage (2026-09-19)
+
+The Doom bridge now exposes owned and pending weapons and capability-gates numeric
+weapon-key controls. Conditional plans can equip an observed owned weapon and
+then engage; the motor does not choose equipment or add fire during the switch.
+Generated planner output `/3` supports this step while `/1` and `/2` retain their
+original grammar and default-plan shape. Inventory reaches model/supervisor
+context. Old detached bridges remain limited to their existing inputs, including
+after prototype-only observation upgrades; fresh bridge startup is required.
+
+Local WASM tests switch using actual keys and recover a fist-equipped elevated
+enemy encounter by selecting the owned pistol and recording a kill. Fixture tests
+cover missing capabilities/inventory, timeout, bounded prepared plans and refusal
+before old-bridge dispatch. These do not qualify live Jev/supervisor selection,
+advanced-weapon behavior, VM branching of switches, or sustained kill rates.
+Stopped demos and saved session data were not started or modified. The broader
+execution, gameplay-quality and live-runtime checklist items remain open.
+
+Validation: the application suite passed 475 tests before the final context and
+resource refinements; the final affected engine, planner, resource and learning
+model checks passed 21 tests, including two added compatibility cases. Type
+checking and the bridge/Doom/chess build passed. No live VM/model check was run.

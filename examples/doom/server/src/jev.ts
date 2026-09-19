@@ -92,7 +92,7 @@ const answerSchema = z.object({
 
 export function decisionState(state: GameState, objective: string, history: GameState[], experience: Experience[] = [], actionTicks = 35) {
   const round = (n: number) => Math.round(n * 10) / 10;
-  const player = (s: GameState) => ({ tick: s.tick, health: s.health, armor: s.armor, ammo: s.ammo, kills: s.kills, items: s.items, position: [round(s.x), round(s.y), round(s.z)], heading: round(s.angle) });
+  const player = (s: GameState) => ({ tick: s.tick, health: s.health, armor: s.armor, ammo: s.ammo, weapon: s.weapon, weapons: s.weapons, pendingWeapon: s.pendingWeapon, weaponSelection: s.weaponSelection === true, kills: s.kills, items: s.items, position: [round(s.x), round(s.y), round(s.z)], heading: round(s.angle) });
   const entity = (e: EntityObservation) => ({ type: e.engineType, health: e.health, distance: round(e.distance), bearing: round(e.relativeBearing), heading: round(e.heading), towardPlayer: round(e.towardPlayerAlignment), z: round(e.position.z) });
   const input = {
     objective,
@@ -160,7 +160,11 @@ export class Jev implements DecisionMaker {
   }
   private async decidePlan(state: GameState, input: ReturnType<typeof feedbackState>, map: Awaited<ReturnType<typeof geometryFor>>, ticks: number, signal: AbortSignal, started: number, context: DecisionContext, experience: Experience[]): Promise<Decision> {
     const plans = context.prepared?.plans ?? candidatePlans(state, map, context.visited, context.pickups);
-    const criteria = Object.fromEntries(plans.map(p => [p.id, `${p.label}${p.evidence ? ` (${p.evidence})` : ''}: ${p.steps.map(s => `${s.label} (at most ${s.maxTicks / 35}s)`).join(' → ')}. ${p.novelty === undefined ? '' : p.novelty > 0 ? 'Leads toward unvisited space. ' : 'Returns to already visited space. '}Target ${Math.round(Math.hypot(p.steps[0]!.target.x - state.x, p.steps[0]!.target.y - state.y))} units away, bearing ${Math.round(bearingTo(state, p.steps[0]!.target))} degrees (+left, -right).`]));
+    const criteria = Object.fromEntries(plans.map(p => {
+      const target = p.steps.find(step => step.kind !== 'equip')?.target;
+      const location = target ? `Target ${Math.round(Math.hypot(target.x - state.x, target.y - state.y))} units away, bearing ${Math.round(bearingTo(state, target))} degrees (+left, -right).` : 'Changes equipment at the current position.';
+      return [p.id, `${p.label}${p.evidence ? ` (${p.evidence})` : ''}: ${p.steps.map(s => `${s.label} (at most ${s.maxTicks / 35}s)`).join(' → ')}. ${p.novelty === undefined ? '' : p.novelty > 0 ? 'Leads toward unvisited space. ' : 'Returns to already visited space. '}${location}`];
+    }));
     const envelope = withDecisionContext(preparationContext({ ...input, trialSeconds: ticks / 35 }, context), state, input.objective, context.stats, experience, context.skills);
     const request = { ...(this.learning ? { model: this.learning.model } : {}), state: learnedState(envelope.input, this.learning?.guidance), questions: {
       plan: choice(learnedInstructions(`${guideInstructions} Which available conditional plan best advances the objective within trialSeconds? Steps end on observed conditions. Code handles immediate collision recovery and aiming. The plan is interrupted on significant damage, a new nearby threat, lost target, or a time limit. Prefer feasible useful progress; map clearance does not guarantee reachability.`, 'plan', this.learning?.guidance), criteria),
@@ -174,7 +178,7 @@ export class Jev implements DecisionMaker {
     if (Math.abs(candidates.reduce((n, p) => n + p.probability, 0) - 1) > .02) throw new Error('Jev returned an invalid plan distribution');
     // Legacy action fields project the opening turn; plan probabilities remain
     // authoritative and are what the session displays and branches on.
-    const opening = (p: RankedPlan): ActionId => { const angle = bearingTo(state, p.steps[0]!.target); return angle > 7 ? 'left' : angle < -7 ? 'right' : 'advance'; };
+    const opening = (p: RankedPlan): ActionId => { if (p.steps[0]!.kind === 'equip') return 'wait'; const angle = bearingTo(state, p.steps[0]!.target); return angle > 7 ? 'left' : angle < -7 ? 'right' : 'advance'; };
     const probabilities = Object.fromEntries(actionIds.map(id => [id, candidates.filter(p => opening(p) === id).reduce((n, p) => n + p.probability, 0)])) as Record<ActionId, number>;
     return { action: opening(candidates.find(p => p.id === selected)!), probabilities,
       jevTrace: { tick: state.tick, episode: state.episode, map: state.map, request: capturedRequest, model: result.model,

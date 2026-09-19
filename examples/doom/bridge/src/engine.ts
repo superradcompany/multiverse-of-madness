@@ -2,16 +2,22 @@ import { readProgressEvents, keyColors } from './progression.ts';
 import { readFile } from 'node:fs/promises';
 import { readEntities } from './telemetry.ts';
 import { PNG } from 'pngjs';
+import { stepSchema, weapons } from '../../contracts/src/game.ts';
 import type { GameState, Input, Step, ProgressEvent } from '../../contracts/src/game.ts';
 
 // ABI from wasmdoom dd321b50. See assets/README.md for source and licenses.
 const key: Record<Input, number> = {
   forward: 0xad, backward: 0xaf, left: 0xac, right: 0xae,
   strafeLeft: 0x2c, strafeRight: 0x2e, fire: 0x9d, use: 0x20,
+  weapon1: 0x31, weapon2: 0x32, weapon3: 0x33, weapon4: 0x34,
+  weapon5: 0x35, weapon6: 0x36, weapon7: 0x37, weapon8: 0x38,
 };
 type EngineExports = { memory: WebAssembly.Memory } & Record<string, unknown>;
 
 export class DoomEngine {
+  // Own instance field: a prototype-only upgrade of an old HTTP bridge must
+  // not claim that its unchanged request parser accepts new weapon inputs.
+  private readonly acceptsWeaponInputs = true;
   private tickCount = 0;
   private progressEvents: ProgressEvent[] = [];
   private progressMap?: string;
@@ -43,7 +49,7 @@ export class DoomEngine {
   }
 
   step({ ticks, inputs }: Step): GameState {
-    if (!Number.isInteger(ticks) || ticks < 1 || ticks > 35) throw new Error('ticks must be 1..35');
+    stepSchema.parse({ ticks, inputs });
     for (const input of inputs) this.call('keydown', key[input]);
     try {
       for (let i = 0; i < ticks; i++) {
@@ -83,7 +89,10 @@ export class DoomEngine {
       pickups: within.filter(e => e.kind === 'pickup').slice(0, 16),
       telemetry: { radius: 2048, lineOfSightKnown: false, engineObjectCount: count },
       tick: this.tickCount, health: n(0), armor: n(4), kills: n(28), items: n(32), secrets: n(36),
-      weapon: ['fist', 'pistol', 'shotgun', 'chaingun', 'rocket launcher', 'plasma gun', 'BFG', 'chainsaw', 'double shotgun'][n(12)] ?? 'unknown',
+      weapon: weapons[n(12)] ?? 'unknown',
+      weapons: weapons.filter((_, i) => Boolean(n(68) & (1 << i))),
+      pendingWeapon: weapons[n(16)] ?? null,
+      ...(this.acceptsWeaponInputs ? { weaponSelection: true as const } : {}),
       ammo: [72, 76, 80, 84].map(n), x: n(128) / 65536, y: n(132) / 65536,
       angle: p.getUint32(140, true) / 2 ** 32 * 360,
       episode: s.getInt32(4, true), map: s.getInt32(8, true),

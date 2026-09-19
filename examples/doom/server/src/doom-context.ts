@@ -33,7 +33,7 @@ export function groundedState(state: GameState, objective: string, history: Game
   });
   const input = {
     objective: objective.slice(0, 1000), secondsHoldingAction: round(actionTicks / 35),
-    player: { health: state.health, armor: state.armor, weapon: state.weapon ?? 'unknown',
+    player: { health: state.health, armor: state.armor, weapon: state.weapon ?? 'unknown', weapons: state.weapons ?? 'unknown', pendingWeapon: state.pendingWeapon === undefined ? 'unknown' : state.pendingWeapon, weaponSelection: state.weaponSelection === true,
       ammo: { bullets: state.ammo[0] ?? null, shells: state.ammo[1] ?? null, cells: state.ammo[2] ?? null, rockets: state.ammo[3] ?? null },
       kills: state.kills, position: [round(state.x), round(state.y), round(state.z)], heading: round(state.angle) },
     recent: earlier ? { seconds: round((state.tick - earlier.tick) / 35), moved: round(Math.hypot(state.x - earlier.x, state.y - earlier.y)), healthChange: state.health - earlier.health, kills: state.kills - earlier.kills } : null,
@@ -77,7 +77,8 @@ export function tacticalState(state: GameState, objective: string, history: Game
   const clearance = Object.fromEntries(Object.entries({ ahead: 0, behind: 180, left: 90, right: -90 }).map(([key, angle]) => [key, map.clearance(state, state.angle + angle)])) as Record<'ahead' | 'behind' | 'left' | 'right', number>;
   return {
     objective: objective.slice(0, 1000), actionSeconds: round(actionTicks / 35),
-    health: state.health, bullets: state.ammo[0] ?? 0, weapon: state.weapon ?? 'unknown',
+    health: state.health, bullets: state.ammo[0] ?? 0, weapon: state.weapon ?? 'unknown', weapons: state.weapons ?? 'unknown', pendingWeapon: state.pendingWeapon === undefined ? 'unknown' : state.pendingWeapon, weaponSelection: state.weaponSelection === true,
+    ammo: { bullets: state.ammo[0] ?? null, shells: state.ammo[1] ?? null, cells: state.ammo[2] ?? null, rockets: state.ammo[3] ?? null },
     nearbyLocks: geometry.nearbyLocks,
     movement: { barrierDistances: rays, playerClearance: clearance, forwardBlocked: clearance.ahead <= 20, backwardBlocked: clearance.behind <= 20, leftBlocked: clearance.left <= 20, rightBlocked: clearance.right <= 20 },
     recentMovement: previous ? Math.round(Math.hypot(state.x - previous.x, state.y - previous.y)) : null,

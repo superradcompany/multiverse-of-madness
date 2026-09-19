@@ -1,4 +1,5 @@
 import type { Sandbox, ExecHandle, ExecSink } from 'microsandbox';
+import { stepSchema, weaponInputs } from '../../contracts/src/game.ts';
 import type { GameState, Step } from '../../contracts/src/game.ts';
 
 // This client process is disposable. The detached game process owns the actual
@@ -27,6 +28,7 @@ type Channel = { handle: ExecHandle; input: ExecSink; done: Promise<void>; pendi
 export class SandboxGame {
   private channel?: Promise<Channel>;
   private sequence = 0;
+  private observed?: GameState;
   constructor(readonly sandbox: Sandbox) {}
 
   private async connect(): Promise<Channel> {
@@ -84,7 +86,14 @@ export class SandboxGame {
       });
     });
   }
-  async state(): Promise<GameState> { return JSON.parse((await this.request('/state')).toString()); }
-  async step(action: Step): Promise<GameState> { return JSON.parse((await this.request('/step', action)).toString()); }
+  async state(): Promise<GameState> { return this.observed = JSON.parse((await this.request('/state')).toString()); }
+  async step(action: Step): Promise<GameState> {
+    stepSchema.parse(action);
+    if (action.inputs.some(input => (weaponInputs as readonly string[]).includes(input))
+      && !(this.observed ?? await this.state()).weaponSelection) {
+      throw new Error('Weapon selection is unsupported by this detached bridge; start an explicitly upgraded game before using weapon controls');
+    }
+    return this.observed = JSON.parse((await this.request('/step', action)).toString());
+  }
   frame(): Promise<Buffer> { return this.request('/frame'); }
 }

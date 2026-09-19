@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { canonicalJson } from '@multiverse/gameplay-harness';
+import { weaponSchema } from '../../contracts/src/game.ts';
+import { weaponInput } from './doom-weapons.ts';
 import type { GameState } from '../../contracts/src/game.ts';
 import type { GamePlan } from './doom-plans.ts';
 import type { Experience } from './experience.ts';
@@ -21,8 +23,13 @@ const legacyPreparationSchema = z.strictObject({
   historyIndices: indices.max(10), experienceIndices: indices.max(8),
   features: z.record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,47}$/), z.union([z.number().finite(), z.boolean(), z.string().max(160)])),
 });
-export const doomPreparationSchema = z.discriminatedUnion('abi', [legacyPreparationSchema,
-  legacyPreparationSchema.extend({ abi: z.literal('doom-preparation/2'), temporaryGoal: doomGoalProposalSchema.optional() })]);
+const goalPreparationSchema = legacyPreparationSchema.extend({ abi: z.literal('doom-preparation/2'), temporaryGoal: doomGoalProposalSchema.optional() });
+const equipmentPlan = plan.extend({ steps: z.array(z.union([plan.shape.steps.element, z.strictObject({
+  kind: z.literal('equip'), weapon: weaponSchema, label: z.string().trim().min(1).max(120), target,
+  maxTicks: z.number().int().min(1).max(2100),
+})])).min(1).max(12) });
+export const doomPreparationSchema = z.discriminatedUnion('abi', [legacyPreparationSchema, goalPreparationSchema,
+  goalPreparationSchema.extend({ abi: z.literal('doom-preparation/3'), plans: z.array(equipmentPlan).min(1).max(10).optional() })]);
 export interface DoomPreparationPool {
   state: GameState; history: GameState[]; experience: Experience[]; planTicks?: number; experienceLimit: number; visited?: string[];
 }
@@ -46,6 +53,7 @@ export function prepareDoomContext(value: unknown, pool: DoomPreparationPool): P
   if (parsed.plans && new Set(parsed.plans.map(item => item.id)).size !== parsed.plans.length) throw new Error('Duplicate prepared plan identity');
   const plans = parsed.plans?.map(item => {
     for (const step of item.steps) {
+      if (step.kind === 'equip' && (!weaponInput(pool.state, step.weapon) || step.target.kind !== 'point')) throw new Error('Prepared weapon selection requires supported controls, an owned selectable weapon and a point target');
       if (step.maxTicks > pool.planTicks!) throw new Error('Prepared step exceeds the current trial duration');
       if (Math.hypot(step.target.x - pool.state.x, step.target.y - pool.state.y) > 4096) throw new Error('Prepared target is outside the local planning radius');
       if (step.target.kind !== 'point') {
@@ -56,6 +64,6 @@ export function prepareDoomContext(value: unknown, pool: DoomPreparationPool): P
     }
     return { ...item, novelty: pool.visited ? Number(!pool.visited.includes(cell({ ...pool.state, ...item.steps.at(-1)!.target }))) : undefined };
   });
-  return { ...(parsed.abi === 'doom-preparation/2' && parsed.temporaryGoal ? { temporaryGoal: parsed.temporaryGoal } : {}),
+  return { ...(parsed.abi !== 'doom-preparation/1' && parsed.temporaryGoal ? { temporaryGoal: parsed.temporaryGoal } : {}),
     historyIndices: parsed.historyIndices, experienceIndices: parsed.experienceIndices, history, experience, plans, features: parsed.features };
 }

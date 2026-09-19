@@ -1,5 +1,6 @@
+import { weaponAmmoIndex } from './doom-weapons.ts';
 import { pickupMemoryPolicy, type PickupMemory } from './doom-pickup-memory.ts';
-import type { GameState } from '../../contracts/src/game.ts';
+import type { GameState, Weapon } from '../../contracts/src/game.ts';
 import type { EntityObservation } from '../../contracts/src/entity.ts';
 import { lockedKey, type DoomMap } from './doom-geometry.ts';
 import type { GamePlan, PlanStep, PlanTarget } from './doom-plans.ts';
@@ -45,7 +46,7 @@ export function interactionPlans(state: GameState, map: DoomMap): GamePlan[] {
 }
 
 const ammoIndex: Record<number, number> = { 63: 0, 64: 0, 65: 3, 66: 3, 67: 2, 68: 2, 69: 1, 70: 1 };
-const weapons: Record<number, string> = { 72: 'BFG', 73: 'chaingun', 74: 'chainsaw', 75: 'rocket launcher', 76: 'plasma gun', 77: 'shotgun', 78: 'double shotgun' };
+const weapons: Record<number, Weapon> = { 72: 'BFG', 73: 'chaingun', 74: 'chainsaw', 75: 'rocket launcher', 76: 'plasma gun', 77: 'shotgun', 78: 'double shotgun' };
 function resourceLabel(s: GameState, p: Pick<EntityObservation, 'engineType'>): string | undefined {
   if ([45, 53, 54, 55].includes(p.engineType) && s.health < ([45, 55].includes(p.engineType) ? 200 : 100)) return 'collect health';
   if (p.engineType >= 47 && p.engineType <= 52) return 'collect a nearby key';
@@ -55,8 +56,11 @@ function resourceLabel(s: GameState, p: Pick<EntityObservation, 'engineType'>): 
   const index = ammoIndex[p.engineType];
   if (index !== undefined && (s.ammo[index] ?? 0) < policy.lowAmmo[index]!) return 'replenish ammunition';
   if (p.engineType === 71 && s.ammo.some((amount, i) => amount < (policy.lowAmmo[i] ?? 0))) return 'collect backpack ammunition';
-  // Ownership is unknown; only propose an evident upgrade from basic weapons.
-  if (weapons[p.engineType] && ['fist', 'pistol', 'chainsaw'].includes(s.weapon ?? '') && weapons[p.engineType] !== s.weapon)
+  const ownedAmmo = weapons[p.engineType] && s.weapons?.includes(weapons[p.engineType]!) ? weaponAmmoIndex(weapons[p.engineType]) : undefined;
+  if (ownedAmmo !== undefined && (s.ammo[ownedAmmo] ?? 0) < policy.lowAmmo[ownedAmmo]!) return 'replenish ammunition';
+  // Legacy observations have unknown ownership; keep their conservative rule.
+  // New inventory avoids sending an unequipped owner back to collect the same weapon.
+  if (weapons[p.engineType] && !s.weapons?.includes(weapons[p.engineType]!) && ['fist', 'pistol', 'chainsaw'].includes(s.weapon ?? '') && weapons[p.engineType] !== s.weapon)
     return `collect ${weapons[p.engineType]}`;
   return undefined;
 }
@@ -69,7 +73,7 @@ export function resourcePlans(state: GameState, map: DoomMap): GamePlan[] {
       || map.sight(state, p.position) !== 'unknown' || map.clearance(state, heading(state, p.position), p.distance + 32) < p.distance - 16) continue;
     const t: PlanTarget = { ...p.position, kind: 'pickup', engineType: p.engineType };
     found.set(label, { id: `resource_${p.engineType}`, label, family: label.includes('key') ? 'key' : 'resource',
-      evidence: 'Currently observed pickup; inventory ownership is not known.', steps: [face(t), move(t, 'collect the pickup')] });
+      evidence: state.weapons ? 'Currently observed useful pickup; weapon inventory is observed.' : 'Currently observed pickup; weapon inventory is unknown.', steps: [face(t), move(t, 'collect the pickup')] });
   }
   return [...found.values()];
 }

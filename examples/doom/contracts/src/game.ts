@@ -1,7 +1,12 @@
 import type { EntityObservation } from './entity.ts';
 import { z } from 'zod';
 
-export const inputSchema = z.enum(['forward', 'backward', 'left', 'right', 'strafeLeft', 'strafeRight', 'fire', 'use']);
+export const weapons = ['fist', 'pistol', 'shotgun', 'chaingun', 'rocket launcher', 'plasma gun', 'BFG', 'chainsaw', 'double shotgun'] as const;
+export const weaponSchema = z.enum(weapons);
+export type Weapon = z.infer<typeof weaponSchema>;
+export const weaponInputs = ['weapon1', 'weapon2', 'weapon3', 'weapon4', 'weapon5', 'weapon6', 'weapon7', 'weapon8'] as const;
+export type WeaponInput = typeof weaponInputs[number];
+export const inputSchema = z.enum(['forward', 'backward', 'left', 'right', 'strafeLeft', 'strafeRight', 'fire', 'use', ...weaponInputs]);
 export type Input = z.infer<typeof inputSchema>;
 export const stepSchema = z.object({
   // One bounded chunk makes cancellation and takeover latency predictable.
@@ -23,6 +28,11 @@ export interface GameState {
   ammo: number[];
   // Optional for detached bridges and recordings created before weapon telemetry.
   weapon?: string;
+  weapons?: Weapon[];
+  // null means no switch is pending; absence means legacy telemetry is unknown.
+  pendingWeapon?: Weapon | null;
+  // Advertised only by a bridge instance whose request schema accepts weapon keys.
+  weaponSelection?: true;
   kills: number;
   items: number;
   secrets: number;
