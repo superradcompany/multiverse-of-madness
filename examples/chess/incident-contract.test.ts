@@ -51,12 +51,16 @@ test('review input versions preserve old contracts and refuse altered cases, goa
   const third = { ...legacy, format: 3, contract: chessIncidentContract(mark, 3) };
   assert.deepEqual(decodeFrozenChessReview(third, 'old'), third);
   const next = freezeChessReview('new', mark, []);
-  assert.equal(next.format, 4); assert.deepEqual(decodeFrozenChessReview(next, 'new'), next);
+  assert.equal(next.format, 5); assert.deepEqual(decodeFrozenChessReview(next, 'new'), next);
+  const { training: _training, recentTraining: _feedback, ...previousFields } = next;
+  const fourth = { ...previousFields, format: 4 };
+  assert.deepEqual(decodeFrozenChessReview(fourth, 'new'), fourth);
+  assert.deepEqual(next.contract, fourth.contract);
   assert.equal(next.contract.budget.limits.simulation, 18);
   assert.equal(next.contract.evaluator.id, 'chess-full-harness-incident-evaluation');
   mark.evidence.mark.objective = 'changed'; assert.equal(next.mark.evidence.mark.objective, 'win');
   assert.throws(() => decodeFrozenChessReview(next, 'different'), /altered/);
-  assert.throws(() => decodeFrozenChessReview({ ...next, format: 5 }, 'new'), /altered/);
+  assert.throws(() => decodeFrozenChessReview({ ...next, format: 6 }, 'new'), /altered/);
   const changedPolicy = structuredClone(next); changedPolicy.policy!.breadth++;
   assert.throws(() => decodeFrozenChessReview(changedPolicy, 'new'), /altered/);
   const missingPolicy = structuredClone(next); delete missingPolicy.policy;

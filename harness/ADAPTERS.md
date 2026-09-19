@@ -157,6 +157,28 @@ rejects incomplete or stale evidence. Compare against the same saved game state
 and fixed opponent/environment behavior. Qualification is distinct from strong
 gameplay: establish strength with broader held-out positions and longer runs.
 
+### Let the supervisor choose practice
+
+`TrainingCatalog<Input>` holds host-authored, versioned practice inputs and seeds.
+Keep acceptance cases outside it. `trainingMenu(catalog)` exposes only IDs, labels,
+descriptions and the host's maximum selection. The supervisor may return a
+`TrainingSelection` referencing that exact catalog; `validateTrainingSelection`
+rejects stale references, unknown/duplicate IDs and extra fields.
+`selectedTrainingScenarios` returns independent execution-input copies in the
+requested order. These helpers neither dispatch work nor grade it.
+
+The application owns catalog content/digest verification, saved selections,
+cancellation, execution allowances and measured receipts. Execute practice in
+separate worlds and model journals, then feed verified compact results into a
+later review. A practice gain must never count toward acceptance, replace a
+required case or change its grading rules. Test this explicitly with a candidate
+that succeeds on chosen practice but fails the independent acceptance contract.
+
+Chess implements this optional phase before its acceptance comparison. Its catalog
+contains recent observed positions, excludes acceptance starting boards and keeps
+practice receipts separate. Doom does not consume the curriculum helpers yet.
+The workflow changes strategy code/guidance; it does not train model weights.
+
 ## Qualify your integration
 
 ### Temporary goals

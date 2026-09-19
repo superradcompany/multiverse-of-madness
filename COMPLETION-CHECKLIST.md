@@ -156,6 +156,23 @@ inventory and supervisor-driven use, not just exposed configuration fields.
 User instructions and explicitly pinned settings remain authoritative. Canonical
 history, VM identities, resource ownership and acceptance evidence are not mutable.
 
+Curriculum progress (2026-09-19): the portable core now exposes host-frozen practice
+menus and validates supervisor selections without accepting new inputs, seeds,
+budgets or grading rules. Chess offers at most four recent observed positions,
+excluding acceptance starting boards, and allows optional selection of up to two.
+Selected practice runs before independent acceptance, using distinct model journals,
+owned cancellation and separate measured receipts. Verified compact feedback from
+completed qualifications feeds later reviews. It does not revise the current
+proposal or train model weights. The UI labels practice separately. Frozen review
+format 5 preserves formats 1–4 and their original acceptance contracts; older hosts
+refuse new review records. Controlled tests prove that winning practice cannot
+qualify a candidate that fails acceptance, and cancelling practice cannot proceed
+to acceptance. Doom integration, live Codex/Jev/executor qualification and useful
+curriculum choices remain unfinished; the broader item stays open.
+Read-only compatibility validation accepted all nine retained historical chess
+reviews (two format 1 and seven format 4) without rewriting them. No saved demo
+session, model or VM was started for this work.
+
 Doom execution-policy progress: supervisor proposals can now supply four bounded
 plan settings: damage before replanning, distance for new-threat interruption,
 minimum movement age before blocked-route detection, and interaction pulse period.

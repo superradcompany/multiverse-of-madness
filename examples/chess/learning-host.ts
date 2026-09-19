@@ -1,4 +1,5 @@
 import { chessAuditFeedback, chessEvaluationFeedback } from './evaluation-feedback.ts';
+import { chessTrainingFeedback } from './training-feedback.ts';
 import '../../scripts/runtime-env.ts';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -66,6 +67,16 @@ export async function openChessLearningHost(directory: string, decision: ChessJe
     } }, context: () => session?.supervisorContext() ?? startupContext, objective: () => requiredSession().snapshot().objective,
     boundary: work => boundary(work),
     evaluationObserver: id => viewer.observer(id, 'proposal'),
+    trainingObserver: id => viewer.observer(id, 'training'),
+    training: async request => {
+      const review = decodeFrozenChessReview(await load(`reviews/${encodeURIComponent(request.proposalId)}/input.json`), request.proposalId);
+      if (!review.training) return;
+      const proposed = await load<Awaited<ReturnType<typeof proposeChessStrategy>>>(`reviews/${encodeURIComponent(request.proposalId)}/proposal.json`);
+      if (!proposed || canonicalJson(proposed.artifact) !== canonicalJson(request.candidate)
+        || canonicalJson(proposed.origin.activation.revision) !== canonicalJson(request.baseline.revision)
+        || canonicalJson(proposed.origin.context) !== canonicalJson(request.context)) throw new Error('Chess training selection does not match the frozen proposal');
+      return proposed.training ? { catalog: review.training, selection: proposed.training } : undefined;
+    },
     liveModel: artifact => new ChessPreparedModel(artifact, { store, executor: live.executor, ledger: liveLedger, limits, decision,
       record: value => save(`live/preparations/${randomUUID()}.json`, value) }),
     evaluationModel: async (artifact, budget, runId) => new ChessPreparedModel(artifact, { store, executor: evaluation.executor, ledger: budget, limits,
@@ -127,13 +138,15 @@ export async function openChessLearningHost(directory: string, decision: ChessJe
           const auditFeedback = await chessAuditFeedback(audits!.snapshot(), id => load(`audits/${id}/comparison.json`));
           const proposalFeedback = await chessEvaluationFeedback(learning.controller.snapshot(), proposalId => load(`evaluations/${encodeURIComponent(proposalId)}/comparison.json`));
           const recentEvaluations = [...auditFeedback.slice(0, 1), ...proposalFeedback].slice(0, 2);
+          const recentTraining = await chessTrainingFeedback(learning.controller.snapshot(), proposalId => load(`evaluations/${encodeURIComponent(proposalId)}/training/report.json`));
           const current = learning.controller.current;
-          const review = freezeChessReview(id, mark, recentEvaluations, current.policy);
+          const review = freezeChessReview(id, mark, recentEvaluations, current.policy, recentTraining);
           await save(`${prefix}/input.json`, review);
           const provider = await CodexCliSupervisor.open<ChessPolicy, ChessStrategyEvidence>({ record: value => save(`${prefix}/generation.json`, value) });
           const proposed = await proposeChessStrategy({ id, origin: mark.origin, current, objective: mark.evidence.mark.objective,
             game: describeChess(adapter.version, runtime.capabilities), contract: chessIncidentContractVersion,
             observations: mark.evidence.observations, temporaryGoal: mark.evidence.temporaryGoal, recentEvaluations, review: { reason: mark.evidence.reason, issue: mark.evidence.mark.issue },
+            training: review.training, recentTraining: review.recentTraining,
             provider, store, ledger: supervisorLedger, limits: { timeoutMs: 300000, maxInputBytes: 65536, maxOutputBytes: 65536, maxCostMicros: 2000000 },
           }, signal);
           await save(`${prefix}/proposal.json`, proposed); signal.throwIfAborted();

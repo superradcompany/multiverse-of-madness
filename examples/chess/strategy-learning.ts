@@ -1,5 +1,7 @@
 import { join, resolve } from 'node:path';
-import { RevisionController, canonicalJson, type BudgetLedger, type EvaluationContract, type LearningRevision, type RevisionJournal, type RevisionPorts, type VersionRef } from '@multiverse/gameplay-harness';
+import { RevisionController, canonicalJson, type BudgetLedger, type EvaluationContract, type LearningRevision, type RevisionJournal, type RevisionPorts, type VersionRef, type QualificationRequest, type TrainingCatalog, type TrainingSelection } from '@multiverse/gameplay-harness';
+import { chessTrainingContract } from './curriculum.ts';
+import type { ChessTrainingReport } from './training-feedback.ts';
 import { JsonFileStore, contentRevision, type ExecutableStore } from '@multiverse/gameplay-harness/node';
 import { chessLearningBinding, type ChessDecisionModel } from './revisions.ts';
 import type { ChessStrategyScenario } from './strategy-evaluation.ts';
@@ -22,6 +24,9 @@ export async function openChessStrategyLearning(options: {
   evaluationModel(artifact: LearningRevision<ChessPolicy>, ledger: BudgetLedger, runId: string): Promise<ChessDecisionModel>;
   liveModel(artifact: LearningRevision<ChessPolicy>): ChessDecisionModel;
   evaluationObserver?(proposalId: string): ChessEvaluationObserver;
+  /** Optional host-verified selection, separate from and unable to change acceptance. */
+  training?(request: QualificationRequest<ChessPolicy>): Promise<{ catalog: TrainingCatalog<ChessStrategyScenario>; selection: TrainingSelection } | undefined>;
+  trainingObserver?(proposalId: string): ChessEvaluationObserver;
 }) {
   const directory = resolve(options.directory), baseline = structuredClone(options.baseline);
   const fixed = 'scenarios' in options.contract ? structuredClone(options.contract) : undefined;
@@ -48,6 +53,24 @@ export async function openChessStrategyLearning(options: {
       const contract = fixed ?? structuredClone(await dynamic!.resolve(request.proposalId));
       if (contract.scenarios.some(item => item.input.objective !== options.objective())) throw new Error('Chess evaluation contract does not match the current user objective');
       const prefix = `evaluations/${encodeURIComponent(request.proposalId)}`;
+      let trainingEvidence: VersionRef | undefined;
+      const training = await options.training?.(structuredClone(request));
+      if (training) {
+        const practice = chessTrainingContract(training.catalog, training.selection, request.baseline.policy);
+        if (practice.scenarios.some(scenario => scenario.input.objective !== options.objective())) throw new Error('Chess training objective is stale');
+        const comparison = await compareChessEvaluation({ directory: join(directory, prefix, 'training/harness'), contract: practice,
+          baseline: request.baseline, candidate: request.candidate, completeAllPairs: true, observer: options.trainingObserver?.(request.proposalId),
+          model: (artifact, ledger, run) => options.evaluationModel(artifact, ledger, `${prefix}/training/${run}`), persistence: {
+            persistBudget: (id, value) => save(`${prefix}/training/budgets/${encodeURIComponent(id)}.json`, value),
+            persistRun: run => save(`${prefix}/training/runs/${encodeURIComponent(run.id)}.json`, run),
+          },
+        }, signal);
+        const receipt: ChessTrainingReport = { format: 1, purpose: 'practice', selection: structuredClone(training.selection), comparison };
+        await save(`${prefix}/training/report.json`, receipt);
+        trainingEvidence = contentRevision('chess-training-report', receipt);
+        signal.throwIfAborted();
+        if (!same(request.context, options.context())) throw new Error('Chess user context changed during practice');
+      }
       const report = await compareChessEvaluation({ directory: join(directory, prefix, 'harness'), contract, baseline: request.baseline, candidate: request.candidate,
         observer: options.evaluationObserver?.(request.proposalId),
         model: (artifact, ledger, run) => options.evaluationModel(artifact, ledger, `${prefix}/${run}`), persistence: {
@@ -57,7 +80,7 @@ export async function openChessStrategyLearning(options: {
       }, signal);
       await save(`${prefix}/comparison.json`, report);
       return { baseline: report.baseline, candidate: report.candidate, context: request.context, contract: request.contract,
-        accepted: report.accepted, reason: report.reason, evidence: { comparison: contentRevision('chess-strategy-comparison', report), evaluatedContract: contentRevision('chess-strategy-evaluation-contract', contract) } };
+        accepted: report.accepted, reason: report.reason, evidence: { comparison: contentRevision('chess-strategy-comparison', report), evaluatedContract: contentRevision('chess-strategy-evaluation-contract', contract), ...(trainingEvidence ? { training: trainingEvidence } : {}) } };
     },
   };
   const saved = await journal.load();

@@ -32,7 +32,7 @@ export function ChessLearningComparison({ onClose }: { onClose(): void }) {
     return () => clearTimeout(timer);
   }, [replaying, position, last]);
   return <section className="learning-comparison" aria-label="Learning comparison">
-    <div className="comparison-heading"><div><h2>{view?.status === 'running' ? 'Testing strategies' : 'Recorded comparison'}</h2><p className="hint">Same starting board. Runs execute one at a time; your live game is separate.</p></div><button onClick={onClose}><ArrowLeft />Back to game</button></div>
+    <div className="comparison-heading"><div><h2>{view?.kind === 'training' ? 'Supervisor-selected practice' : view?.status === 'running' ? 'Testing strategies' : 'Recorded comparison'}</h2><p className="hint">{view?.kind === 'training' ? 'Practice provides feedback for a later review. Separate host tests decide whether a strategy qualifies.' : 'Same starting board. Runs execute one at a time; your live game is separate.'}</p></div><button onClick={onClose}><ArrowLeft />Back to game</button></div>
     {error && <p role="alert" className="error">{error}</p>}
     {!view ? <p role="status">Loading recorded positions…</p> : <>
       <div className="comparison-controls"><label>Test position <select aria-label="Comparison test position" value={selected} onChange={event => { setScenario(event.target.value); setPosition(0); setFollow(false); setReplaying(false); }}>

@@ -17,7 +17,7 @@ export interface ChessEvaluationObserver {
   failed(): Promise<void>;
 }
 export interface ChessComparisonView {
-  version: 1; id: string; kind: 'proposal' | 'audit'; status: 'running' | 'finished' | 'interrupted'; reason?: string;
+  version: 1; id: string; kind: 'proposal' | 'audit' | 'training'; status: 'running' | 'finished' | 'interrupted'; reason?: string;
   runs: Array<{ scenarioId: string; label: string; role: 'baseline' | 'candidate'; status: 'waiting' | 'running' | EvaluationRun<unknown>['status'];
     targetPlies: number; attemptedPlies: number; frames: ChessState[]; trials: ChessEvaluationProgress['trials']; value?: number; scoredPlies?: number }>;
   summary?: ChessSampleSummary;
@@ -32,7 +32,7 @@ export class ChessComparisonViewer {
     let saved: ChessComparisonView | undefined;
     try { saved = await store.load(); } catch { return viewer; }
     if (saved) {
-      if (saved.version !== 1 || !saved.id || !['proposal', 'audit'].includes(saved.kind) || !Array.isArray(saved.runs)) return viewer;
+      if (saved.version !== 1 || !saved.id || !['proposal', 'audit', 'training'].includes(saved.kind) || !Array.isArray(saved.runs)) return viewer;
       viewer.value = structuredClone(saved);
       if (viewer.value.status === 'running') {
         viewer.value.status = 'interrupted'; viewer.value.reason = 'Testing stopped. Recorded positions remain available; no comparison is being rerun.';
@@ -76,7 +76,8 @@ export class ChessComparisonViewer {
       },
       finish: async report => {
         const value = current(); if (!value) return;
-        value.status = 'finished'; value.reason = report.reason; value.summary = summarizeChessComparison(report); await this.persist();
+        value.status = 'finished'; value.reason = kind === 'training' ? 'Practice finished. Separate host tests decide whether this strategy qualifies.' : report.reason;
+        value.summary = summarizeChessComparison(report); await this.persist();
       },
       failed: async () => { const value = current(); if (value) { value.status = 'interrupted'; value.reason = 'Testing stopped; recorded positions remain available.'; await this.persist(); } },
     };

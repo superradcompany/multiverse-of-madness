@@ -49,6 +49,11 @@ The intended supervisor can propose executable learning-system revisions, test
 against a frozen baseline and request promotion. It does not own the canonical
 experiment history, hard budgets or independent acceptance metric.
 
+The portable curriculum helpers expose host-authored practice menus, validate a
+supervisor's case selection and resolve immutable input copies. Chess uses them
+for optional practice with separately recorded feedback; acceptance remains a
+host-owned comparison. See [practice integration](ADAPTERS.md#let-the-supervisor-choose-practice).
+
 This package lives in `harness/` inside the Multiverse of Madness repository,
 alongside the Doom and chess demos. A normal clone includes all source files.
 It can be built and consumed independently through the directory or a tarball.

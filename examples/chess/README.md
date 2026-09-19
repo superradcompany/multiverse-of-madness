@@ -80,6 +80,24 @@ regression position. Missing or incomplete required runs cannot qualify a change
 Regression audits can restore an earlier strategy without rolling back the live
 board. Small paired samples describe those runs, not general chess strength.
 
+The supervisor may also choose up to two practice positions from a compact menu
+of four recent observed positions. Acceptance starting boards are excluded.
+Practice compares both sources for four selected half-moves with separate model
+journals and host-owned allowances, including all explored futures. It runs before
+acceptance, in the same cancellable background job. Omission adds no practice work.
+Verified practice results from completed qualifications feed a later review; they
+do not update the current proposal or count toward promotion. This is strategy
+iteration, not model-weight training.
+
+The viewer labels this phase **Watch practice / Replay practice** and explains
+that independent host tests decide qualification. Practice and acceptance receipts
+are stored separately under `learning/evaluations/<proposal>/`. New frozen review
+records use format 5; formats 1–4 retain their original acceptance contracts and
+remain readable. Older builds refuse format 5, so keep the updated host for new
+reviews. Existing session and revision artifact formats are unchanged. Controlled
+tests cover selection, feedback, cancellation and acceptance independence; live
+Codex/Jev/executor practice and its gameplay value are not yet qualified.
+
 Open **Watch comparison / Replay comparison** to inspect recorded boards, switch
 cases or seek through the moves. Viewing does not rerun Jev or create executor VMs.
 Final scores remain labelled while viewing earlier positions. This is recorded
