@@ -7,6 +7,7 @@ import type { GameState, Input } from '../../contracts/src/game.ts';
 import type { PlanView } from '../../contracts/src/session.ts';
 import type { DoomMap } from './doom-geometry.ts';
 import { plausibleRangedTarget } from './doom-targeting.ts';
+import { defaultDoomExecutionPolicy, type DoomExecutionPolicy } from './doom-execution-policy.ts';
 
 interface Point { x: number; y: number; z: number }
 export interface PlanTarget extends Point { kind: 'point' | 'enemy' | 'pickup'; engineType?: number }
@@ -104,13 +105,13 @@ export function stopPlan(run: PlanExecution, status: PlanExecution['status'], re
 
 // Returns one tick of intent. The motor controller still handles collisions and
 // shooting safety. No state prediction or engine state mutation is involved.
-export function planInputs(run: PlanExecution, state: GameState, history: GameState[], map?: DoomMap): Input[] {
+export function planInputs(run: PlanExecution, state: GameState, history: GameState[], map?: DoomMap, execution: Readonly<DoomExecutionPolicy> = defaultDoomExecutionPolicy): Input[] {
   if (run.status !== 'running') return [];
   if (state.tick >= run.untilTick) return stopPlan(run, 'horizon', 'comparison duration reached');
   if (!state.alive) return stopPlan(run, 'replan', 'player died');
   if (state.phase !== 'level' || state.map !== run.started.map || state.episode !== run.started.episode) return stopPlan(run, 'replan', 'game state changed');
-  if (run.started.health - state.health >= 8) return stopPlan(run, 'replan', 'taking damage');
-  if (state.enemies.some(e => e.distance < 160 && map?.sight(state, e.position) !== 'solid-wall-blocked' && !run.started.enemies.some(old => old.engineType === e.engineType && distance(old.position, e.position) < 128))) return stopPlan(run, 'replan', 'new nearby threat');
+  if (run.started.health - state.health >= execution.damageBeforeReplan) return stopPlan(run, 'replan', 'taking damage');
+  if (state.enemies.some(e => e.distance < execution.nearbyThreatDistance && map?.sight(state, e.position) !== 'solid-wall-blocked' && !run.started.enemies.some(old => old.engineType === e.engineType && distance(old.position, e.position) < 128))) return stopPlan(run, 'replan', 'new nearby threat');
   while (run.step < run.plan.steps.length) {
     const step = run.plan.steps[run.step]!;
     let target = run.tracked ?? step.target;
@@ -143,7 +144,7 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
       if (distance(state, target) > doomPlanPolicy.useDistance) return stopPlan(run, 'replan', 'interaction out of reach');
       if (Math.abs(bearing) > 7) return [bearing > 0 ? 'left' : 'right'];
       // Use is edge-triggered in Doom. Release between attempts.
-      return (state.tick - run.stepStarted.tick) % 7 === 0 ? ['use'] : [];
+      return (state.tick - run.stepStarted.tick) % execution.usePulseTicks === 0 ? ['use'] : [];
     }
     if (step.kind === 'strafeAttack') {
       const direction = step.direction ?? 'strafeLeft';
@@ -152,7 +153,7 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
     }
     if (step.kind === 'move') {
       const recent = history.filter(s => s.tick >= state.tick - 9 && s.tick >= run.stepStarted.tick && s.map === state.map && s.episode === state.episode);
-      if (state.tick - run.stepStarted.tick >= 35 && recent.length >= 8 && recent.every(s => distance(s, state) < 2 && Math.abs(s.angle - state.angle) < 4)) return stopPlan(run, 'replan', 'route blocked');
+      if (state.tick - run.stepStarted.tick >= execution.blockedAfterTicks && recent.length >= 8 && recent.every(s => distance(s, state) < 2 && Math.abs(s.angle - state.angle) < 4)) return stopPlan(run, 'replan', 'route blocked');
     }
     if (Math.abs(bearing) > (step.kind === 'move' ? 25 : 7)) return [bearing > 0 ? 'left' : 'right'];
     return step.kind === 'attack' ? ['fire'] : ['forward', 'use'];

@@ -13,6 +13,7 @@ import { geometryFor } from './doom-geometry.ts';
 import { Session } from './session.ts';
 import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import { decodeDoomProposal, doomSupervisorEvidence, generateDoomProposal, type DoomProposalOptions, type DoomProposalRecord } from './doom-supervisor-proposal.ts';
+import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const guidance = { kind: 'guidance', reason: 'Reduce repeated unproductive movement', prompts: { plan: 'Use measured progress before repeating a waypoint.' } };
@@ -65,6 +66,22 @@ test('generation freezes observed evidence, accounts actual usage and submits wi
     assert.deepEqual(result.output, guidance);
     assert.deepEqual((await f.run()).candidate, result.candidate); assert.equal(f.calls, 1);
     assert.equal(JSON.stringify(result.request).includes('acceptance: '), false);
+  } finally { await f.cleanup(); }
+});
+
+test('supervisor execution settings become a candidate artifact without changing the running policy', async () => {
+  const f = await fixture();
+  try {
+    const original = f.session.learningPolicy();
+    const execution = { ...defaultDoomExecutionPolicy, blockedAfterTicks: 14, damageBeforeReplan: 4 };
+    f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution } });
+    const result = await f.run();
+    assert.equal(result.status, 'submitted');
+    assert.deepEqual(result.candidate!.policy.execution, execution);
+    assert.deepEqual(f.session.learningPolicy(), original);
+    await f.reopen();
+    assert.deepEqual((await f.run()).candidate!.policy.execution, execution);
+    assert.equal(f.calls, 1);
   } finally { await f.cleanup(); }
 });
 

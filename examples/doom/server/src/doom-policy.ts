@@ -2,8 +2,10 @@ import { canonicalJson, resolvePolicy, type LearningRevision, type PolicyPatch, 
 import { contentRevision } from '@multiverse/gameplay-harness/node';
 import { z } from 'zod';
 import { doomOutcomeWeightsSchema } from './doom-outcome.ts';
+import { doomExecutionPolicySchema } from './doom-execution-policy.ts';
 
 const settings = z.strictObject({
+  execution: doomExecutionPolicySchema.optional(),
   outcomeWeights: doomOutcomeWeightsSchema.optional(),
   forkThreshold: z.number().min(0).max(1),
   breadth: z.number().int().min(1).max(10),

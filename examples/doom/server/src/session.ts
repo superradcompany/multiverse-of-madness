@@ -503,7 +503,7 @@ export class Session extends EventEmitter {
       if ((run.skillsRevision ?? 0) !== (this.view.skillsRevision ?? 0)) { stopPlan(run, 'replan', 'AI skills updated'); break; }
       if (this.view.pendingObjective || run.guide && run.guide !== this.view.objective) { stopPlan(run, 'replan', 'AI guide updated'); break; }
       const started = performance.now(), oldStep = run.step;
-      let inputs = planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true));
+      let inputs = planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.executionPolicy(world));
       world.navigation = planNavigationMemory(world.navigation, run, oldStep);
       world.view.plan = planView(run);
       if (run.status !== 'running') break;
@@ -522,7 +522,7 @@ export class Session extends EventEmitter {
     }
     // Record condition/limit transitions at the final frame as well as before
     // the next input. This prevents a completed trial showing an active plan.
-    if (!signal.aborted && run.status === 'running') planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true));
+    if (!signal.aborted && run.status === 'running') planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.executionPolicy(world));
     world.view.plan = planView(run);
     if (beganRunning && run.status !== 'running') {
       const feedback = failedPlanFeedback(run, world.view.state);
@@ -562,7 +562,7 @@ export class Session extends EventEmitter {
     world.history = world.history.slice(-10);
     if (world.plan) {
       const previousStep = world.plan.step;
-      planInputs(world.plan, state, world.history, await geometryFor(state, true, true));
+      planInputs(world.plan, state, world.history, await geometryFor(state, true, true), this.executionPolicy(world));
       world.navigation = planNavigationMemory(world.navigation, world.plan, previousStep);
       if (world.plan.step !== previousStep && world.plan.status === 'running') this.say(world.view.id, `${world.plan.plan.label}: step ${world.plan.step + 1}/${world.plan.plan.steps.length}, ${world.plan.plan.steps[world.plan.step]!.label}.`);
       world.view.plan = planView(world.plan);
@@ -782,9 +782,17 @@ export class Session extends EventEmitter {
     for (const world of this.worlds.values()) this.advanceGoal(world);
     this.say(this.mainId, `New objective: ${this.view.objective}`);
   }
+  private executionPolicy(world: World) {
+    const reference = world.view.policyRevision;
+    if (!reference) return undefined;
+    const policy = this.policies.get(reference.version);
+    if (!policy) throw new Error('Plan execution requires its recorded policy revision');
+    return policy.policy.values.execution;
+  }
   private controlPolicy(): DoomPolicy {
-    const outcomeWeights = this.revisions ? learningDoomPolicy(this.revisions.current().artifact, this.userOverrides).policy.values.outcomeWeights : undefined;
-    return { ...(outcomeWeights ? { outcomeWeights } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
+    const learned = this.revisions ? learningDoomPolicy(this.revisions.current().artifact, this.userOverrides).policy.values : undefined;
+    const outcomeWeights = learned?.outcomeWeights, execution = learned?.execution;
+    return { ...(outcomeWeights ? { outcomeWeights } : {}), ...(execution ? { execution } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
       trialTicks: this.view.trialDurationTicks ?? this.options.horizon, decisionTicks: this.view.decisionIntervalTicks ?? 35,
       ...(this.view.decisionIntervalMode ? { decisionIntervalMode: this.view.decisionIntervalMode } : {}),
       planningMode: this.view.planningMode ?? 'plans', winnerDelaySeconds: this.view.winnerDelaySeconds ?? 0,

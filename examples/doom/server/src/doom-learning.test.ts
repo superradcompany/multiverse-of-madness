@@ -16,7 +16,8 @@ import { Recordings } from './recordings.ts';
 import { defaultDoomOutcomeWeights } from './doom-outcome.ts';
 import { doomSurvivalProgress } from './doom-revision-evaluation.ts';
 import { Runtime, decision, initial } from '../test-support/fixture-runtime.ts';
-import type { GameState } from '../../contracts/src/game.ts';
+import type { GameState, Step } from '../../contracts/src/game.ts';
+import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 
 const options = { threshold: .75, horizon: 7, branches: 2, paceMs: 0 };
 const fallback = { decide: async () => structuredClone(decision) };
@@ -34,7 +35,7 @@ async function fixture(adopt = false, runtime: Runtime = new Runtime('root')) {
     return { ...fields, revision: contentRevision('doom-learning-test', fields) };
   };
   const baseline = make('baseline', policy), candidate = make('candidate', { ...policy, decisionTicks: 14, trialTicks: 21, memory: { ...policy.memory, perDecision: 3 } });
-  const hooks: { model?: () => Promise<void>; persist?: () => Promise<void> } = {};
+  const hooks: { model?: () => Promise<void>; persist?: () => Promise<void>; decision?: typeof decision } = {};
   const seen: Array<{ tag: string; guide: string; ticks: number | undefined; skills: string[]; trialTicks: number | undefined }> = [];
   const ports: RevisionPorts<DoomPolicy> = {
     context: () => session?.supervisorContext() ?? contentRevision('unattached', {}),
@@ -52,7 +53,7 @@ async function fixture(adopt = false, runtime: Runtime = new Runtime('root')) {
   const binding = () => doomLearningBinding(controller, identity, artifact => ({ decide: async (_state, guide, _history, signal, _experience, ticks, context) => {
     await hooks.model?.(); signal.throwIfAborted();
     seen.push({ tag: artifact.prompts.tactical!, guide, ticks, trialTicks: context?.policy?.trialTicks, skills: artifact.skills.map(skill => skill.instructions) });
-    return { ...structuredClone(decision), model: artifact.model.version };
+    return { ...structuredClone(hooks.decision ?? decision), model: artifact.model.version };
   } }));
   const points = new Map<string, GameState>();
   const attach = (current: Session) => {
@@ -238,6 +239,37 @@ test('supervised search weights change future selection, survive restore, and ca
     const tampered = structuredClone(saved);
     (tampered.policies!.find(entry => entry.revision.version === scoring.revision.version)!.policy.values.outcomeWeights!.exploration as { kills: number }).kills = 999;
     await assert.rejects(f.reopen(tampered), /does not match its revision/);
+  } finally { await f.cleanup(); }
+});
+
+test('supervised execution policy drives session inputs and retains historical provenance on reconnect', async () => {
+  const commands: Step[] = [];
+  class ObservedRuntime extends Runtime {
+    override async step(command: Step) { commands.push(structuredClone(command)); return super.step(command); }
+    override async branch(ids: string[]) { const state = await this.state(); return ids.map(id => new ObservedRuntime(id, structuredClone(state))); }
+  }
+  const f = await fixture(false, new ObservedRuntime('root'));
+  try {
+    f.hooks.decision = { ...decision, confidence: 1, plans: { selected: 'interact', candidates: [{ id: 'interact', label: 'try switch', probability: 1,
+      steps: [{ kind: 'use', label: 'press and release', target: { kind: 'point', x: 32, y: 0, z: 0 }, maxTicks: 140 }] }] } };
+    const execution = { ...defaultDoomExecutionPolicy, usePulseTicks: 2 };
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, execution } };
+    await f.propose('execution', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('execution'); await f.step();
+    assert.deepEqual(commands.map(command => command.inputs), [['use'], [], ['use'], [], ['use'], [], ['use']]);
+    await f.promote();
+    const saved = f.session.checkpoint(), reference = main(f.session).policyRevision!;
+    assert.deepEqual(saved.policies!.find(policy => policy.revision.version === reference.version)!.policy.values.execution, execution);
+    await f.save(); await f.reopen();
+    assert.deepEqual(f.session.learningPolicy().execution, execution);
+    assert.deepEqual(main(f.session).policyRevision, reference);
+    await f.controller.rollback(f.baseline.revision, 'Restore the original execution rules');
+    assert.equal(f.session.learningPolicy().execution, undefined);
+    assert.deepEqual(f.session.checkpoint().policies!.find(policy => policy.revision.version === reference.version)!.policy.values.execution, execution);
+    const changed = structuredClone(saved);
+    (changed.policies!.find(policy => policy.revision.version === reference.version)!.policy.values.execution! as { usePulseTicks: number }).usePulseTicks = 3;
+    await assert.rejects(f.reopen(changed), /does not match its revision/);
   } finally { await f.cleanup(); }
 });
 

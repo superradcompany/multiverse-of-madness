@@ -156,6 +156,21 @@ inventory and supervisor-driven use, not just exposed configuration fields.
 User instructions and explicitly pinned settings remain authoritative. Canonical
 history, VM identities, resource ownership and acceptance evidence are not mutable.
 
+Doom execution-policy progress: supervisor proposals can now supply four bounded
+plan settings: damage before replanning, distance for new-threat interruption,
+minimum movement age before blocked-route detection, and interaction pulse period.
+Session execution reads the decision's immutable policy record, including after
+reconnect; it does not switch a running plan to a newer revision. Omitted settings
+preserve historical behavior and policy hashes. Proposal, input-dispatch, restart,
+rollback, malformed-value and policy-tampering tests cover the connection. These
+are controlled local tests, not real-VM or gameplay-quality qualification. The
+low-level aiming/collision motor and other fixed thresholds remain unfinished.
+Validation: 399 application tests, type checking and the production build passed.
+All 113 policy records in the stopped live demo still verify with their original
+hashes. No demo process or VM was started. Older builds cannot consume policies
+containing the new execution field; use the explicit build-upgrade workflow before
+enabling it in a saved supervised session.
+
 ## 4. Prove that automatic learning helps during real play
 
 - [x] Capture the live problem at a safe boundary, freeze proposal evidence, and
