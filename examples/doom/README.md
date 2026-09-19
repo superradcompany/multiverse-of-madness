@@ -45,18 +45,26 @@ Credentials stay in the server environment, outside browser bundles and game VMs
 - The brain button opens background-learning activity and comparisons. Normal
   operation does not require manual proposal, test or activation commands.
 
-The supervisor may optionally choose up to two public opening exercises to test a
-specific uncertainty. The comparison viewer labels these **Practice** and retains
-their replays. Practice results inform a later review; they never approve a change.
-The saved incident and private regression tests still decide activation. These
-opening exercises do not reproduce every later room or demonstrate stronger play.
+The supervisor may optionally choose up to two practice situations: earlier
+observed checkpoints or public opening exercises. The menu describes each earlier
+position's location, health, kills and observed enemies. The comparison viewer
+labels **Practice** and retains its replays. Measured results inform a later review;
+they never approve a change. The current saved incident and private regression
+tests still decide activation.
 
 Practice uses the existing background evaluator process with separate run journals
-and allowances. Omitting it adds no practice runs. New proposal records use format
-2; format-1 records remain readable unchanged, while older hosts refuse format 2.
-Use the explicit gameplay-build upgrade workflow for a saved supervised session.
-The integration has controlled local test coverage; live supervisor/VM curriculum
-qualification remains pending.
+and allowances. The current learning lineage retains up to four recent distinct,
+living checkpoints, plus any selected by pending proposals. Older unreferenced
+checkpoints are collected after evaluator cleanup. These are stored snapshots, not
+running VMs. Observed practice keeps its recorded history and is offered only for
+the same user guidance. The current incident is excluded. Full inputs remain on
+the backend; the supervisor sees a compact menu. Omitting practice adds no runs.
+
+New proposal records use format 3 to freeze their practice inputs; formats 1 and 2
+remain readable unchanged. Older hosts refuse format 3. Use the explicit build
+upgrade workflow for a saved supervised session. Automatic retirement of archived
+lineage practice checkpoints is not implemented yet. Controlled tests cover this
+integration; live supervisor/VM curriculum qualification remains pending.
 
 The main world can remain paused while futures explore. A card saying
 **choosing next approach** is waiting for Jev's next decision; it is not the winner

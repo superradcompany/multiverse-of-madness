@@ -26,7 +26,7 @@ export function LearningEvaluation({ proposalId }: { proposalId: string }) {
   return <section className="evaluation-preview" aria-label="Gameplay comparison">
     <div className="evaluation-toolbar"><strong>{data?.total ? `${data.finished} / ${data.total} runs finished` : data && !data.active ? 'No evaluation games were started' : 'Preparing test games…'}</strong>
       {data && data.scenarios.length > 0 && <select aria-label="Comparison scenario" value={selected ?? 'follow'} onChange={event => setSelected(event.target.value === 'follow' ? undefined : event.target.value)}>
-        <option value="follow">Follow comparison</option>{data.scenarios.map(id => <option key={id} value={id}>{id.startsWith('practice/') ? `Practice: ${id.slice(9).replaceAll('-', ' ')}` : id === 'saved-stuck-position' ? 'Saved stuck position' : `Acceptance start ${data.scenarios.filter(item => !item.startsWith('practice/')).indexOf(id) + 1}`}</option>)}
+        <option value="follow">Follow comparison</option>{data.scenarios.map(id => <option key={id} value={id}>{id.startsWith('practice/') ? `Practice: ${data.labels?.[id] ?? id.slice(9).replaceAll('-', ' ')}` : id === 'saved-stuck-position' ? 'Saved stuck position' : `Acceptance start ${data.scenarios.filter(item => !item.startsWith('practice/')).indexOf(id) + 1}`}</option>)}
       </select>}
     </div>
     {data?.total ? <><progress aria-label="Evaluation run progress" value={data.finished} max={data.total} />

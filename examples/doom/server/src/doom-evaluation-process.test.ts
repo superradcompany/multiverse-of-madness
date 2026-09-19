@@ -35,6 +35,10 @@ test('evaluation worker exchanges requests, rejects stale context without creati
     await worker.recover(); await worker.recover();
     const request = { proposalId: randomUUID(), baseline: initial, candidate: initial, contract: worker.version, context: { ...version, version: 'stale' } };
     await assert.rejects(worker.qualify(request, new AbortController().signal), /context changed/);
+    const mutable = structuredClone(request);
+    const frozen = worker.qualify(mutable, new AbortController().signal);
+    mutable.context = version;
+    await assert.rejects(frozen, /context changed/, 'queued worker requests retain the originally supplied context');
     await assert.rejects(worker.qualify(request, AbortSignal.abort(new Error('cancelled'))), /cancelled/);
     const current = { ...request, context: version };
     await assert.rejects(worker.qualify(current, new AbortController().signal, undefined, undefined,

@@ -67,7 +67,7 @@ describe setup. A check that could not run is unverified, not passed.
 | Selected-path replay | Retention/stitching tests and historical viewer checks | Current cross-game restart/GC/replay soak |
 | Doom evaluation recordings | Recorded-route, recovery and viewer fixture tests | Real VM comparison replay and interrupted-run soak on this implementation |
 | Plain chess adoption | Offline startup, old-checkpoint, completed-game replay and publication-failure tests | Live Jev/VM adoption qualification |
-| Training curriculum | Portable selection tests plus controlled chess and Doom practice/feedback/restart/cancellation; practice success cannot override failed acceptance; Doom IPC rejects stale selections before allocating VMs | Live supervisor-selected practice, broader Doom practice states and measured learning value |
+| Training curriculum | Portable selection tests plus controlled chess and Doom practice/feedback/restart/cancellation; practice success cannot override failed acceptance; Doom observed-state retention/pinning and stale-selection IPC checks | Live supervisor-selected practice, archived-lineage checkpoint retirement and measured learning value |
 | Shared sessions manager | Isolated-directory catalog tests, authenticated lifecycle tests, detached HTTP child reconnect/stop and browser form/responsive checks | Managed real-game start/reopen and independent replay/learning soak |
 | Performance | Historical delivery/decision/executor measurements; read-only analyzers | Current causal attribution, browser frame measurements and matched before/after runs |
 | Distribution | Clean package-consumer and root-workspace checks reported historically | Final clean checkout plus current cross-game/runtime acceptance |

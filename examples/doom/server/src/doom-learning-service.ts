@@ -1,5 +1,5 @@
 import { doomTrainingCatalog } from './doom-curriculum.ts';
-import { trainingMenu, validateTrainingSelection } from '@multiverse/gameplay-harness';
+import { trainingMenu, selectedTrainingScenarios, validateTrainingSelection } from '@multiverse/gameplay-harness';
 import { DoomLearningIncidents, decodeDoomIncidents } from './doom-learning-incidents.ts';
 import { activeSkills } from '../../contracts/src/skills.ts';
 import { decodeDoomLearningManifest as decodeManifest, type DoomLearningManifest as Manifest } from './doom-learning-manifest.ts';
@@ -303,14 +303,20 @@ export class DoomLearningService {
         const retained = this.incidents!.snapshot().records.some(record => record.proposalId === request.proposalId);
         const incident = retained ? this.incidents!.ready(request.proposalId) : undefined;
         const record = await this.proposalStore(request.proposalId).load();
-        const catalog = doomTrainingCatalog(manifest.contract);
+        const catalog = record?.trainingCatalog ?? doomTrainingCatalog(manifest.contract);
         const training = record?.training;
         if (training) {
           if (!same(record.candidate, request.candidate) || !same(record.request.origin.context, request.context)
             || !same(record.request.current, request.baseline) || !same(record.request.evidence.training, trainingMenu(catalog))) throw new Error('Doom practice proposal no longer matches this qualification');
           validateTrainingSelection(catalog, training);
+          for (const scenario of selectedTrainingScenarios(catalog, training)) if (scenario.input.incident) {
+            const owner = this.incidents!.proposalForReference(scenario.input.incident.reference);
+            if (!owner) throw new Error('Practice checkpoint is no longer retained');
+            const retained = this.incidents!.ready(owner);
+            if (!same(retained.snapshot, scenario.input.incident) || !same(sessionContinuation(retained.evidence), scenario.input.continuation)) throw new Error('Practice checkpoint differs from its recorded observation');
+          }
         }
-        return this.evaluator!.qualify(request, signal, incident?.snapshot, incident ? sessionContinuation(incident.evidence) : undefined, training);
+        return this.evaluator!.qualify(request, signal, incident?.snapshot, incident ? sessionContinuation(incident.evidence) : undefined, training, training ? catalog : undefined);
       } });
     await this.collectIncidents();
   }
@@ -346,7 +352,7 @@ export class DoomLearningService {
           : selectedProvider === 'codex' ? await CodexCliSupervisor.open<DoomPolicy, DoomProposalEvidence>({ record })
           : await ClaudeCodeSupervisor.open<DoomPolicy, DoomProposalEvidence>({ unrestricted: true, effort: 'medium', record });
         return { id, store, provider, supervisor: this.supervisor!, models: this.models!, executables: new ExecutableStore(join(this.options.directory, 'executables')),
-          unrestricted: true, trainingCatalog: doomTrainingCatalog(this.manifest!.contract), testsSavedSituation: true, historicalExperiments: this.historicalExperiments, ledger: this.generation!, limits: this.manifest!.proposalLimits, capture: () => {
+          unrestricted: true, trainingCatalog: doomTrainingCatalog(this.manifest!.contract, this.incidents!.recentReady(), saved), testsSavedSituation: true, historicalExperiments: this.historicalExperiments, ledger: this.generation!, limits: this.manifest!.proposalLimits, capture: () => {
             if (!same(context, this.game().supervisorContext())) throw new Error('User guidance changed while saving the learning situation');
             return structuredClone(saved);
           },
@@ -412,7 +418,16 @@ export class DoomLearningService {
     if (!this.incidents || !this.supervisor) return;
     const now = Date.now();
     const retained = this.supervisor.overview().journal.proposals.filter(proposal => proposal.status === 'proposed' && proposal.expiresAt > now);
-    await this.incidents.collect(new Set(retained.map(proposal => proposal.id)));
+    const pins = new Set([...retained.map(proposal => proposal.id), ...this.incidents.recentReady().map(situation => situation.proposalId)]);
+    for (const proposal of retained) {
+      const record = await this.proposalStore(proposal.id).load();
+      if (!record?.training || !record.trainingCatalog) continue;
+      for (const scenario of selectedTrainingScenarios(record.trainingCatalog, record.training)) if (scenario.input.incident) {
+        const id = this.incidents.proposalForReference(scenario.input.incident.reference);
+        if (id) pins.add(id);
+      }
+    }
+    await this.incidents.collect(pins);
   }
   private proposalStore(id: string): JsonFileStore<DoomProposalRecord> { z.string().uuid().parse(id); return this.store('proposals/' + id + '.json', decodeDoomProposal); }
   private store<T>(file: string, decode: (value: unknown) => T): JsonFileStore<T> {

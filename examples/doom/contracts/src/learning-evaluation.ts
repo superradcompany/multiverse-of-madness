@@ -21,5 +21,5 @@ export interface EvaluationRunPreview {
 }
 export interface LearningEvaluationView {
   proposalId: string; active: boolean; total: number; finished: number;
-  scenarios: string[]; runs: EvaluationRunPreview[];
+  scenarios: string[]; labels?: Record<string, string>; runs: EvaluationRunPreview[];
 }

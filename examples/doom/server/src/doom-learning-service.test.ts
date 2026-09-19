@@ -115,12 +115,34 @@ test('service runs optional practice independently and feeds its measured result
     assert.equal(preview.total, 10); assert.equal(preview.finished, 4);
     const replay = preview.runs.find(run => run.purpose === 'practice' && run.replay)!;
     assert.equal((await f.service.evaluationReplayFrames(id, replay.id, 0, 1)).length, 1);
-    assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    assert.equal(f.points.size, 1, 'retain one observed practice checkpoint, not a running world'); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    const retained = new Map([...f.points].map(([reference, state]) => [reference, structuredClone(state)]));
     const modelCalls = f.modelCalls; await f.reopen(); assert.equal(f.modelCalls, modelCalls);
+    await f.session.takeover(f.source.id); await f.session.input(f.source.id, ['forward']); f.session.release(f.source.id);
     await f.service.start({ kind: 'propose', id: randomUUID(), proposalKind: 'guidance' }); await settled(f.service);
     const previous = f.requests.at(-1)!.previousExperiments as Array<{ outcome: { practice: { purpose: string; results: unknown[] } } }>;
     assert.equal(previous[0]!.outcome.practice.purpose, 'practice'); assert.equal(previous[0]!.outcome.practice.results.length, 1);
     assert.equal(f.modelCalls, modelCalls); assert.equal(f.providerCalls, 2);
+    assert.ok(f.requests.at(-1)!.training!.scenarios[0]!.id.startsWith('observed-'));
+    const second = f.service.view().proposals[0]!.id;
+    // Move the selected old checkpoint outside the four-position reservoir. The
+    // pending proposal must keep its exact practice input alive across restart.
+    for (let index = 0; index < 4; index++) {
+      await f.session.takeover(f.source.id); await f.session.input(f.source.id, ['forward']); f.session.release(f.source.id);
+      await f.service.start({ kind: 'propose', id: randomUUID(), proposalKind: 'guidance' }); await settled(f.service);
+    }
+    for (const [reference, state] of retained) assert.deepEqual(f.points.get(reference), state);
+    await f.reopen();
+    const currentGame = f.session.checkpoint();
+    await f.service.start({ kind: 'evaluate', id: randomUUID(), proposalId: second }); const checked = await settled(f.service);
+    assert.equal(checked.jobs[0]!.status, 'complete', JSON.stringify(checked.jobs));
+    assert.equal(checked.proposals.find(proposal => proposal.id === second)!.result?.accepted, false);
+    assert.deepEqual(f.session.checkpoint(), currentGame);
+    const observed = await f.service.evaluationView(second);
+    const practiceRun = observed.runs.find(run => run.scenarioId.startsWith('practice/observed-') && run.replay)!;
+    assert.ok(practiceRun); assert.match(observed.labels![practiceRun.scenarioId]!, /Observed E1M1/);
+    for (const reference of retained.keys()) assert.equal(f.points.has(reference), false, 'release old practice input only after its borrowing proposal has joined cleanup');
+    assert.equal(f.points.size, 5, 'four recent positions plus one selected by another pending proposal'); assert.equal(f.providerCalls, 6);
   } finally { await f.cleanup(); }
 });
 
@@ -157,7 +179,7 @@ test('service proposals and paired evaluation survive restart without duplicate 
     assert.equal(view.jobs[0]!.status, 'complete', JSON.stringify(view.jobs));
     assert.equal(view.proposals[0]!.result?.accepted, false); assert.equal(view.proposals[0]!.result?.cases, 1);
     assert.equal(f.modelCalls, 128); assert.equal(view.budget.liveModelCalls, 0);
-    assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    assert.equal(f.points.size, 1, 'retain one observed practice checkpoint, not a running world'); assert.ok([...f.worlds.values()].every(world => world.destroyed));
     const preview = await f.service.evaluationView(id);
     assert.equal(preview.total, 8); assert.equal(preview.finished, 2); assert.equal(preview.active, false);
     assert.ok(preview.runs.slice(0, 2).every(run => run.status === 'complete'));

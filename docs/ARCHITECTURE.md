@@ -65,7 +65,7 @@ that can restore an earlier strategy while preserving the current board.
 | Temporary goals | Validated targets, deadlines and observed completion | Validated targets, deadlines and observed completion |
 | Search and recovery settings | Versioned policy; explicit user overrides remain authoritative | Pinned policy; automatic qualification currently covers source changes only |
 | Motor behavior and scoring | Bounded execution/motor parameters and search reward weights | Engine rules and host evaluator remain fixed |
-| Training curriculum | Optional public opening exercises, separate practice recordings and later feedback | Optional selection from a host-frozen menu of observed practice positions; separate feedback and acceptance |
+| Training curriculum | Optional retained observed checkpoints and public openings, separate practice recordings and later feedback | Optional selection from a host-frozen menu of observed practice positions; separate feedback and acceptance |
 
 Doom and chess practice can inform a later supervisor review, but cannot qualify its own
 candidate. Each uses separate run journals and receipts; the original acceptance

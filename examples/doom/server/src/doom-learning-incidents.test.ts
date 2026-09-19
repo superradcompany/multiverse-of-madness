@@ -24,7 +24,7 @@ async function fixture() {
       return [];
     } },
   };
-  return { ports, points, owner: await DoomLearningIncidents.open(ports),
+  return { ports, points, session, owner: await DoomLearningIncidents.open(ports),
     failWrite: () => { failWrite = true; }, loseAck: () => { loseAck = true; }, descendants: (value: boolean) => { descendants = value; } };
 }
 test('ready evidence is immutable, retained by proposal and collected after descendants release', async () => {
@@ -58,4 +58,24 @@ test('failed intent publication fences the owner and never dispatches capture', 
   await assert.rejects(f.owner.capture(randomUUID(), new AbortController().signal), /disk unavailable/);
   assert.equal(f.points.size, 0);
   await assert.rejects(f.owner.capture(randomUUID(), new AbortController().signal), /disk unavailable/);
+});
+
+test('practice reservoir is bounded, distinct, restartable and still honors explicit proposal pins', async () => {
+  const f = await fixture(), ids: string[] = [];
+  for (let index = 0; index < 7; index++) {
+    await f.session.takeover('incident-source'); await f.session.input('incident-source', ['forward']); f.session.release('incident-source');
+    const id = randomUUID(); ids.push(id); await f.owner.capture(id, new AbortController().signal);
+  }
+  const duplicate = randomUUID(); await f.owner.capture(duplicate, new AbortController().signal);
+  const recent = f.owner.recentReady(); assert.equal(recent.length, 4);
+  assert.deepEqual(recent.map(situation => situation.proposalId), [duplicate, ...ids.slice(3, 6).reverse()]);
+  assert.equal(f.owner.proposalForReference(recent[0]!.snapshot.reference), duplicate);
+  const pinned = new Set([ids[0]!, ...recent.map(situation => situation.proposalId)]);
+  await f.owner.collect(pinned); assert.equal(f.points.size, 5);
+  const reopened = await DoomLearningIncidents.open(f.ports);
+  assert.deepEqual(reopened.recentReady(), recent);
+  recent[0]!.evidence.view.objective = 'mutated'; assert.notEqual(reopened.recentReady()[0]!.evidence.view.objective, 'mutated');
+  await reopened.collect(new Set(reopened.recentReady().map(situation => situation.proposalId)));
+  assert.equal(f.points.size, 4); assert.equal(reopened.snapshot().records.find(record => record.proposalId === ids[0])!.phase, 'released');
+  assert.throws(() => reopened.recentReady(-1), /retention count/);
 });

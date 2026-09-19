@@ -78,16 +78,20 @@ test('supervisor selects only offered practice, without changing the candidate a
   try {
     const ordinary = await baseline.run();
     const fields = { format: 1 as const, maximumSelection: 1, scenarios: [{ id: 'opening', label: 'Opening', description: 'Check initial priorities', seed: 'private-seed', input: { setup: [], minimumSelectedTicks: 210 } }] };
-    const catalog = { ...fields, revision: contentRevision('test-training', fields) };
+    const catalog = { ...fields, revision: contentRevision('doom-training-catalog', fields) };
     selected.options.trainingCatalog = catalog;
     const training = { catalog: catalog.revision, scenarioIds: ['opening'], reason: ' Test the proposed guidance ' };
     selected.hooks.result = async () => ({ ...guidance, training });
     const result = await selected.run();
-    assert.equal(result.version, 2); assert.equal(result.status, 'submitted');
+    assert.equal(result.version, 3); assert.equal(result.status, 'submitted');
     assert.deepEqual(result.training, training); assert.deepEqual(result.request.evidence.training, trainingMenu(catalog));
     assert.equal(JSON.stringify(result.request).includes('private-seed'), false);
     assert.deepEqual(result.candidate, ordinary.candidate, 'practice selection is outside the learning artifact');
     assert.deepEqual(decodeDoomProposal(result), result);
+    const { trainingCatalog: _, ...legacy } = result;
+    assert.deepEqual(decodeDoomProposal({ ...legacy, version: 2 }), { ...legacy, version: 2 });
+    const altered = structuredClone(result); altered.trainingCatalog!.scenarios[0]!.input.minimumSelectedTicks = 1;
+    assert.throws(() => decodeDoomProposal(altered), /catalog content changed/);
     assert.throws(() => decodeDoomProposal({ ...result, version: 1 }), /Legacy/);
     assert.throws(() => decodeDoomProposal({ ...result, training: undefined }), /Missing recorded/);
     assert.throws(() => decodeDoomProposal({ ...result, training: { ...training, scenarioIds: ['private'] } }), /does not match/);
@@ -99,8 +103,10 @@ test('an unoffered or stale supervisor practice selection fails before candidate
   for (const offered of [false, true]) {
     const f = await fixture();
     try {
-      if (offered) f.options.trainingCatalog = { format: 1, revision: { id: 'catalog', version: 'current' }, maximumSelection: 1,
-        scenarios: [{ id: 'opening', label: 'Opening', description: 'Initial choices', seed: 'host', input: { setup: [] } }] };
+      if (offered) {
+        const fields = { format: 1 as const, maximumSelection: 1, scenarios: [{ id: 'opening', label: 'Opening', description: 'Initial choices', seed: 'host', input: { setup: [] } }] };
+        f.options.trainingCatalog = { ...fields, revision: contentRevision('doom-training-catalog', fields) };
+      }
       f.hooks.result = async () => ({ ...guidance, training: { catalog: { id: 'catalog', version: 'stale' }, scenarioIds: ['opening'], reason: 'Test choices' } });
       const result = await f.run();
       assert.equal(result.status, 'failed'); assert.match(result.error!, offered ? /Invalid or stale/ : /No practice catalog/);

@@ -191,6 +191,19 @@ Read-only validation decoded 63 retained historical Doom proposal records withou
 changing their contents. Application tests, the focused abandoned-practice recovery
 check, type checking, production build and 135 core tests passed.
 
+Observed Doom practice (2026-09-19): new format-3 proposals freeze full host-owned
+practice inputs outside the model request. The public menu can now describe earlier
+captured positions and their health, kills, enemies and location. Current incident,
+terminal, duplicate and different-user-context positions are excluded. Four recent
+distinct living snapshots per learning lineage are retained, plus selections pinned
+by pending proposals. Tests move a selected state beyond this reservoir, reopen the
+service, run practice from the borrowed snapshot, and collect it only after the
+last proposal releases it. The current game stays unchanged. Formats 1 and 2 remain
+readable; older hosts refuse format 3. UI labels identify the observed position.
+The full application suite passed 456 tests; live usefulness and real snapshot
+qualification remain pending. Automatic retirement of archived-lineage practice
+snapshots still needs implementation, so broader GC/curriculum items remain open.
+
 Doom execution-policy progress: supervisor proposals can now supply four bounded
 plan settings: damage before replanning, distance for new-threat interruption,
 minimum movement age before blocked-route detection, and interaction pulse period.

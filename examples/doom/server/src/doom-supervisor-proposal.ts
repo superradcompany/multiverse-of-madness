@@ -1,5 +1,5 @@
 import type { DoomVmScenario } from './doom-vm-evaluations.ts';
-import type { DoomTrainingFeedback } from './doom-curriculum.ts';
+import { validateDoomTrainingCatalog, type DoomTrainingFeedback } from './doom-curriculum.ts';
 import { trainingMenu, validateTrainingSelection, type TrainingCatalog, type TrainingMenu, type TrainingSelection } from '@multiverse/gameplay-harness';
 import { doomIncidentFeedback } from './doom-incident-feedback.ts';
 import { previousPlanFeedback } from './plan-feedback.ts';
@@ -90,7 +90,7 @@ const proposalSchema = (usesJev: boolean) => z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('planner'), ...jevEdits, source: sourceSchema, model: z.string().regex(/^jev-[a-zA-Z0-9._-]{1,120}$/).optional() }),
 ]);
 const sharedTaskParts = [
-  'When evidence.training offers a public practice menu, optionally return training:{catalog,scenarioIds,reason} using its exact catalog identity and at most maximumSelection listed IDs. Choose only exercises that test a specific uncertainty; omit training when these opening exercises do not address the observed problem. Practice uses separate resources before independent acceptance. Its results inform a later review, not edits to this candidate or model weights. Practice cannot approve a change, weaken acceptance, modify the user objective, or supply new inputs/seeds/budgets. Previous experiments may contain practice feedback; incomplete runs and a small sample do not demonstrate improved play.',
+  'When evidence.training offers a public practice menu, optionally return training:{catalog,scenarioIds,reason} using its exact catalog identity and at most maximumSelection listed IDs. Choose only exercises that test a specific uncertainty; omit training when the offered exercises do not address the observed problem. Observed-position exercises restore earlier host checkpoints with their recorded history; they exclude the current mandatory incident test. Opening exercises start a fresh game. Practice uses separate resources before independent acceptance. Its results inform a later review, not edits to this candidate or model weights. Practice cannot approve a change, weaken acceptance, modify the user objective, or supply new inputs/seeds/budgets. Previous experiments may contain practice feedback; incomplete runs and a small sample do not demonstrate improved play.',
   'Propose one learning-system improvement grounded in the supplied observed Doom play. Keep the user objective and overrides intact. Return kind=guidance with complete replacement policy/prompts/skills fields, kind=executor for an isolated ranker, or kind=planner for isolated candidate-generation/context/retrieval code followed by Jev. Source changes contain complete TypeScript source plus optional replacement settings. Omitted fields stay unchanged. Do not change the host adapter, evaluator, budget, observations, engine input vocabulary or game state. Do not claim improvement before independent evaluation.',
   'Optional policy.outcomeWeights changes search preferences separately for survival/exploration/combat priorities. Each set contains health, kills, novelCells, items, secrets, ammo and exit weights within the provided schema. Omitting the field retains historical scoring. These weights only select gameplay futures; they cannot alter the independent acceptance metric or make dead futures eligible. Propose them only with a specific observed tradeoff to test.',
   'Optional policy.execution configures plan interruption and interaction cadence: damageBeforeReplan (health lost since plan start, default 8), nearbyThreatDistance (world units for newly observed threats, default 160), blockedAfterTicks (minimum movement-step age before a stationary-history check can replan, default 35), and usePulseTicks (press/release period, default 7). All four fields are required when supplied. The clock is 35 ticks/second. Values are bounded by the schema and pinned to each decision. Use observed execution failures to justify changes; these settings cannot alter collision rules, actor identity, legal inputs or independent acceptance metrics. Omission uses the historical defaults.',
@@ -111,13 +111,13 @@ const task = taskParts.join('\n');
 const guidanceTask = sharedTaskParts.join('\n') + '\nPrefer a concise reusable strategic guide. Jev owns frequent execution. Change only what the observed failure requires; do not add unrelated instructions.';
 
 export interface DoomProposalRecord {
-  version: 1 | 2; training?: TrainingSelection; binding: VersionRef; id: string; createdAt: number; expiresAt: number; limits: SupervisorLimits; unrestricted?: boolean;
+  version: 1 | 2 | 3; training?: TrainingSelection; trainingCatalog?: TrainingCatalog<DoomVmScenario>; binding: VersionRef; id: string; createdAt: number; expiresAt: number; limits: SupervisorLimits; unrestricted?: boolean;
   request: SupervisorRequest<DoomPolicy, DoomProposalEvidence>; requestRevision: VersionRef;
   status: 'requested' | 'responded' | 'ready' | 'submitted' | 'failed' | 'cancelled' | 'interrupted';
   output?: unknown; receipt?: SupervisorReceipt; candidate?: LearningRevision<DoomPolicy>; reason?: string; error?: string;
 }
 const ref = z.strictObject({ id: z.string().min(1), version: z.string().min(1) });
-const recordSchema = z.strictObject({ version: z.union([z.literal(1), z.literal(2)]), training: trainingSchema.optional(), binding: ref, id: z.string().uuid(), createdAt: z.number().int().nonnegative(),
+const recordSchema = z.strictObject({ version: z.union([z.literal(1), z.literal(2), z.literal(3)]), trainingCatalog: z.unknown().optional(), training: trainingSchema.optional(), binding: ref, id: z.string().uuid(), createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(), limits: z.unknown(), unrestricted: z.boolean().optional(), request: z.unknown(), requestRevision: ref,
   status: z.enum(['requested', 'responded', 'ready', 'submitted', 'failed', 'cancelled', 'interrupted']),
   output: z.unknown().optional(), receipt: z.unknown().optional(), candidate: z.unknown().optional(), reason: z.string().optional(), error: z.string().optional() });
@@ -125,6 +125,11 @@ export function decodeDoomProposal(value: unknown): DoomProposalRecord {
   const parsed = recordSchema.parse(value) as DoomProposalRecord;
   validateSupervisorLimits(parsed.limits);
   if (!same(parsed.requestRevision, contentRevision('doom-supervisor-request', parsed.request)) || parsed.request.id !== parsed.id) throw new Error('Doom proposal request content mismatch');
+  if (parsed.version === 3) {
+    if (!parsed.trainingCatalog) throw new Error('Doom proposal is missing its frozen practice catalog');
+    validateDoomTrainingCatalog(parsed.trainingCatalog);
+    if (!same(trainingMenu(parsed.trainingCatalog), parsed.request.evidence.training)) throw new Error('Doom practice menu differs from its frozen catalog');
+  } else if (parsed.trainingCatalog) throw new Error('Legacy Doom proposal cannot contain a frozen practice catalog');
   if (parsed.version === 1 && (parsed.training || parsed.request.evidence.training)) throw new Error('Legacy Doom proposal cannot contain training');
   if (parsed.candidate && (parsed.output as { training?: unknown })?.training && !parsed.training) throw new Error('Missing recorded Doom practice selection');
   if (parsed.training) {
@@ -162,6 +167,7 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
   z.string().uuid().parse(options.id); validateSupervisorLimits(options.limits);
   const kind = doomProposalKindSchema.optional().parse(options.kind);
   const trainingCatalog = options.trainingCatalog ? structuredClone(options.trainingCatalog) : undefined;
+  if (trainingCatalog) validateDoomTrainingCatalog(trainingCatalog);
   const limits = structuredClone(options.limits), binding = options.supervisor.binding.identity;
   const previous = await options.store.load();
   if (previous) {
@@ -203,7 +209,7 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
   }
   if (kind !== 'guidance' && current.executor.id === 'learning-executor') request.evidence.currentSource = (await options.executables.get(current.executor)).source;
   canonicalJson(request);
-  const record: DoomProposalRecord = { version: trainingCatalog ? 2 : 1, binding, id: options.id, createdAt, expiresAt: createdAt + journal.rules.maxLifetimeMs,
+  const record: DoomProposalRecord = { version: trainingCatalog ? 3 : 1, ...(trainingCatalog ? { trainingCatalog } : {}), binding, id: options.id, createdAt, expiresAt: createdAt + journal.rules.maxLifetimeMs,
     limits, ...(options.unrestricted ? { unrestricted: true } : {}), request, requestRevision: contentRevision('doom-supervisor-request', request), status: 'requested' };
   await options.store.save(record);
   try {

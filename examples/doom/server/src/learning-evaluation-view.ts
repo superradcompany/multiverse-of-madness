@@ -72,7 +72,9 @@ export class LearningEvaluationReader {
     const practice = this.includePractice ? await this.practiceReader().view(proposalId, active) : undefined;
     const practiceRuns = practice?.runs.map(run => ({ ...run, scenarioId: 'practice/' + run.scenarioId, purpose: 'practice' as const })) ?? [];
     const allRuns = [...practiceRuns, ...runs];
-    return { proposalId, active, scenarios: [...(practice?.scenarios.map(id => 'practice/' + id) ?? []), ...scenarios], runs: allRuns,
+    const savedLabels = await this.read<Record<string, string>>(join(root, 'labels.json'), value => z.record(z.string(), z.string().max(160)).parse(value));
+    const labels = { ...savedLabels?.value, ...Object.fromEntries(Object.entries(practice?.labels ?? {}).map(([id, label]) => ['practice/' + id, label])) };
+    return { proposalId, active, ...(Object.keys(labels).length ? { labels } : {}), scenarios: [...(practice?.scenarios.map(id => 'practice/' + id) ?? []), ...scenarios], runs: allRuns,
       total: allRuns.length, finished: allRuns.filter(run => ['complete', 'error', 'cancelled', 'timeout'].includes(run.status)).length };
   }
 

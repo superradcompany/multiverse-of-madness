@@ -59,7 +59,7 @@ process.on('message', (command: EvaluationProcessCommand | { id: number; kind: '
       if (command.kind === 'recover') { await recover(); reply({ id: command.id } satisfies EvaluationProcessReply); }
       else {
         context = command.context;
-        const result = await evaluator.qualify(command.request, control.signal, command.incident, command.continuation, command.training);
+        const result = await evaluator.qualify(command.request, control.signal, command.incident, command.continuation, command.training, command.trainingCatalog);
         reply({ id: command.id, result } satisfies EvaluationProcessReply);
       }
     } catch (error) { reply({ id: command.id, error: error instanceof Error ? error.message : String(error) } satisfies EvaluationProcessReply); }

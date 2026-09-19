@@ -13,6 +13,7 @@ const recordSchema = z.strictObject({
 const schema = z.strictObject({ version: z.literal(1), records: z.array(recordSchema) });
 export type DoomIncidentRecord = z.infer<typeof recordSchema>;
 export type SavedDoomIncidents = z.infer<typeof schema>;
+export interface DoomPracticeSituation { proposalId: string; snapshot: NonNullable<DoomIncidentRecord['snapshot']>; evidence: SessionCheckpoint }
 export function decodeDoomIncidents(value: unknown): SavedDoomIncidents {
   const saved = schema.parse(value);
   const ids = new Set<string>();
@@ -44,6 +45,22 @@ export class DoomLearningIncidents {
   }
   snapshot(): SavedDoomIncidents { return structuredClone(this.saved); }
   isCapturing(proposalId: string) { return this.capturing === proposalId; }
+  proposalForReference(reference: string): string | undefined { return this.saved.records.find(record => record.reference === reference)?.proposalId; }
+  /** A bounded reservoir, newest first; duplicates and terminal positions add no practice value. */
+  recentReady(limit = 4): DoomPracticeSituation[] {
+    if (!Number.isSafeInteger(limit) || limit < 0 || limit > 16) throw new Error('Invalid practice retention count');
+    const result: DoomPracticeSituation[] = [], seen = new Set<string>();
+    for (let index = this.saved.records.length - 1; index >= 0 && result.length < limit; index--) {
+      const record = this.saved.records[index]!;
+      if (record.phase !== 'ready' || seen.has(record.snapshot!.state.version)) continue;
+      const evidence = record.evidence as SessionCheckpoint;
+      const main = evidence.worlds.find(world => world.view.id === evidence.view.mainId)?.view.state;
+      if (!main?.alive || main.phase !== 'level') continue;
+      seen.add(record.snapshot!.state.version);
+      result.push({ proposalId: record.proposalId, ...this.ready(record.proposalId) });
+    }
+    return result;
+  }
   ready(proposalId: string) {
     const record = this.saved.records.find(value => value.proposalId === proposalId);
     if (!record || record.phase !== 'ready') throw new Error('Proposal has no retained incident');

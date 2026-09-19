@@ -177,7 +177,9 @@ that succeeds on chosen practice but fails the independent acceptance contract.
 Chess implements this optional phase before its acceptance comparison. Its catalog
 contains recent observed positions, excludes acceptance starting boards and keeps
 practice receipts separate. Doom uses the same helpers for an optional public
-opening-exercise menu. Its saved incident and private regression cases remain
+menu of retained observed checkpoints and opening exercises. The host pins selected
+snapshots until comparisons finish, separately from a bounded recent-state pool.
+Its current saved incident and private regression cases remain
 mandatory acceptance tests; practice is recorded separately and cannot approve a
 change. Both applications still need live curriculum-quality qualification.
 The workflow changes strategy code/guidance; it does not train model weights.

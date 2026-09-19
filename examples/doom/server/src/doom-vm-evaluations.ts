@@ -1,5 +1,5 @@
-import { doomTrainingContract, type DoomTrainingFeedback } from './doom-curriculum.ts';
-import type { EvaluationComparison, TrainingSelection } from '@multiverse/gameplay-harness';
+import { doomTrainingCatalog, doomTrainingContract, type DoomTrainingFeedback } from './doom-curriculum.ts';
+import type { EvaluationComparison, TrainingCatalog, TrainingSelection } from '@multiverse/gameplay-harness';
 import type { SessionContinuation } from './session.ts';
 import { withDoomEvaluationAllowance, type DoomEvaluationContract } from './doom-evaluation-allowance.ts';
 import { withDoomIncident, requireDoomIncidentImprovement, doomIncidentRejection } from './doom-incident-evaluation.ts';
@@ -66,8 +66,9 @@ export class DoomVmEvaluations {
     } finally { this.recovering = false; }
   }
 
-  async qualify(input: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation, training?: TrainingSelection) {
+  async qualify(input: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation, training?: TrainingSelection, trainingCatalog?: TrainingCatalog<DoomVmScenario>) {
     if (this.active || this.recovering) throw new Error('VM evaluator is already working');
+    trainingCatalog = trainingCatalog ? structuredClone(trainingCatalog) : undefined;
     training = training ? structuredClone(training) : undefined;
     const request = structuredClone(input); z.string().uuid().parse(request.proposalId);
     if (canonicalJson(request.contract) !== canonicalJson(this.version)) throw new Error('VM evaluation contract changed');
@@ -76,7 +77,7 @@ export class DoomVmEvaluations {
     if (continuation && !incident) throw new Error('Incident knowledge requires a captured game state');
     const scenarios = incident ? withDoomIncident(this.contract, incident, continuation) : this.contract;
     const contract = withDoomEvaluationAllowance(scenarios, request.baseline, request.candidate, context.value);
-    const practiceContract = training ? doomTrainingContract(this.contract, training) : undefined;
+    const practiceContract = training ? doomTrainingContract(scenarios, training, trainingCatalog) : undefined;
     const evaluationRequest = { ...request, contract: contentRevision('doom-evaluation-contract', contract) };
     signal.throwIfAborted(); this.active = true;
     let owner: DoomEvaluationVms | undefined;
@@ -96,6 +97,9 @@ export class DoomVmEvaluations {
       if (practiceContract && training) {
         const selection = structuredClone(training);
         await write('training.json', { version: 1, purpose: 'practice', selection, contract: practiceContract });
+        const labels = Object.fromEntries((trainingCatalog ?? doomTrainingCatalog(this.contract)).scenarios
+          .filter(scenario => selection.scenarioIds.includes(scenario.id)).map(scenario => [scenario.id, scenario.label]));
+        await this.store(join(this.options.directory, 'practice', request.proposalId, 'labels.json')).save(labels);
         const practice = new DoomVmEvaluations({ ...this.options, directory: join(this.options.directory, 'practice'), contract: practiceContract });
         const measured = await practice.qualify({ ...request, contract: practice.version }, signal);
         const comparison = measured.evidence as EvaluationComparison<DoomVmScenario, DoomEvaluationEvidence>;
