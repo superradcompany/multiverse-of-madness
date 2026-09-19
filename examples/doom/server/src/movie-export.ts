@@ -44,9 +44,16 @@ export class MovieExports {
       const job: Job = { view: { id, status: 'encoding', progress: 0, missingHistory: path.missingHistory }, file: join(this.directory, `${id}.mp4`), updated: Date.now(), controller: new AbortController(), task: Promise.resolve() };
       this.jobs.set(id, job);
       job.task = this.encode(job, path).catch(async error => {
+        // Publish the terminal state only after incomplete output is removed.
+        // Polling clients may act on that state immediately.
+        try { await rm(job.file, { force: true }); }
+        catch {
+          job.view.status = 'error';
+          job.view.error = 'Movie export failed and its temporary file could not be removed. Retry cancellation to clean it up.';
+          return;
+        }
         job.view.status = job.controller.signal.aborted ? 'cancelled' : 'error';
         job.view.error = job.controller.signal.aborted ? undefined : error instanceof Error ? error.message : 'Movie export failed.';
-        await rm(job.file, { force: true });
       }).finally(() => { job.updated = Date.now(); });
       void job.task.catch(() => {});
       return { ...job.view };
