@@ -152,10 +152,15 @@ silently replace model or budget configuration.
 `jev/` stores model configuration/receipts, and `learning/` holds strategy sources,
 revision/jobs/audit journals and evaluation evidence when enabled.
 
-The web host and CLI share an exclusive `.owner` file. An interrupted process can
-leave a stale lock; verify the former process is gone before removing that file.
-Never open one directory with two owners. See [sessions](../../docs/SESSIONS.md)
-for independent runs and gamepad-menu configuration.
+The web host and CLI share a local process lease and an exclusive `.owner` marker
+that also excludes older hosts. New version-2 markers can be reclaimed after a
+crash only when the process lease is free, the marker matches this host and
+directory, and its process no longer exists. A live or reused PID, old-format
+marker, malformed marker, or marker from another host/directory requires manual
+verification; it is never silently removed. Older hosts still refuse an existing
+marker, including one left by a crashed newer host. Never open one directory with
+two owners. These are local ownership checks, not shared-storage coordination.
+See [sessions](../../docs/SESSIONS.md) for independent runs and navigation.
 
 Session formats 1–3 remain readable: new-game history uses format 2, temporary goals
 use format 3, and explicit learning adoption uses format 4. Recordings do not

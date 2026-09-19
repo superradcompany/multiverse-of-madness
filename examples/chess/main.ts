@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
-import { mkdir, open, readFile, unlink, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { acquireChessDataLease } from './data-lease.ts';
 import { ChessAdapter, ChessFixtureModel } from './adapter.ts';
 import { ChessRuntimeStore } from './runtime-store.ts';
 import { ChessJevModel } from './jev.ts';
@@ -16,14 +16,9 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: {
 const command = positionals[0] ?? 'run', root = resolve(values.directory!);
 const cycles = Number(values.cycles);
 if (positionals.length > 1 || !['run', 'status', 'rollback', 'replay'].includes(command) || !Number.isSafeInteger(cycles) || cycles < 0 || cycles > 10000) throw new Error('Expected run/status/rollback/replay and 0 to 10000 cycles');
-await mkdir(root, { recursive: true });
-// One writer across CLI processes. Never silently remove a possibly live owner's lock.
-const lockPath = join(root, '.owner');
-const lock = await open(lockPath, 'wx', 0o600).catch(error => { throw new Error(`Cannot own chess session ${root}; another host or interrupted owner lock exists`, { cause: error }); });
-const lockIdentity = (await lock.stat()).ino;
+const lease = await acquireChessDataLease(root);
 let session: ChessSession | undefined;
 try {
-  await lock.writeFile(JSON.stringify({ pid: process.pid, token: randomUUID() }));
   let saved: ChessSessionCheckpoint | undefined;
   try { saved = JSON.parse(await readFile(join(root, 'session.json'), 'utf8')) as ChessSessionCheckpoint; }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
@@ -74,7 +69,5 @@ try {
       ...(command === 'replay' ? { replay: await session.replay() } : {}) }, null, 2));
   } finally { process.removeListener('SIGINT', stop); await session.detach(); }
 } finally {
-  await lock.close();
-  try { if ((await stat(lockPath)).ino === lockIdentity) await unlink(lockPath); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  await lease.release();
 }

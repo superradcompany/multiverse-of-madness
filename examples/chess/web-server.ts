@@ -1,8 +1,8 @@
 import { createServer } from 'node:http';
 import { sessionControl } from '../shared/server/session-control.ts';
-import { mkdir, open, readFile, stat, unlink } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { acquireChessDataLease } from './data-lease.ts';
 import { z } from 'zod';
 import { ChessAdapter, ChessFixtureModel } from './adapter.ts';
 import { ChessJevModel } from './jev.ts';
@@ -80,16 +80,9 @@ const server = createServer(async (req, res) => {
 });
 // Claim the port before opening any persistent session; share the CLI's single-writer lock.
 await new Promise<void>((done, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', done); });
-await mkdir(directory, { recursive: true });
-const lockPath = join(directory, '.owner');
-const lock = await open(lockPath, 'wx', 0o600).catch(error => { server.close(); throw error; });
-const lockIdentity = (await lock.stat()).ino;
-async function release() {
-  await lock.close();
-  try { if ((await stat(lockPath)).ino === lockIdentity) await unlink(lockPath); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-}
+const lease = await acquireChessDataLease(directory).catch(error => { server.close(); throw error; });
+const release = () => lease.release();
 try {
-  await lock.writeFile(JSON.stringify({ pid: process.pid, token: randomUUID() }));
   let saved: ChessSessionCheckpoint | undefined;
   try { saved = JSON.parse(await readFile(join(directory, 'session.json'), 'utf8')); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const kind = z.enum(['jev', 'fixture']).parse(process.env.CHESS_MODEL ?? (saved?.provenance.model.id === 'chess-workflow-fixture' ? 'fixture' : 'jev'));

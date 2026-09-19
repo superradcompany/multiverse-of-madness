@@ -38,8 +38,12 @@ directories. Existing standalone runs remain available through the commands belo
 configure the manager. Keep these stable when reopening it. Its versioned
 `sessions.json` is private and contains control tokens. Do not publish it. Backend
 startup failures are written to `runs/<id>/host.log`; no log is sent to the browser.
-A failed chess process can leave its exclusive `.owner` file; the manager does not
-steal that lock. Resolve the reported ownership error before starting it again.
+Chess hosts now hold a local process lease alongside their exclusive `.owner`
+marker. After a crash, a new host can reclaim its version-2 marker only after
+acquiring the lease and verifying the same host/directory and an absent owner
+process. Old-format, malformed, moved or foreign-host markers and live/reused PIDs
+are refused. Resolve those ownership errors explicitly before starting again;
+the manager never removes a lock or kills a process to force a restart.
 
 Lifecycle tests and browser checks use offline HTTP fixtures, including a detached
 child and manager reconnection. Managed real-game creation/reopening and a
@@ -61,9 +65,10 @@ workflow fixture. Chess learning additionally needs the VM runtime and Codex CLI
 See the [Doom](../examples/doom/README.md) and [chess](../examples/chess/README.md)
 guides before starting learning or adopting an existing session.
 
-Never point two backends at the same data directory. Doom has a process lease;
-chess has an exclusive `.owner` file. Neither provides multi-host shared storage
-coordination. The local servers are not authenticated multi-user services.
+Never point two backends at the same data directory. Both games have process
+leases; chess retains an exclusive `.owner` file for older hosts. Neither provides
+multi-host shared storage coordination. The local servers are not authenticated
+multi-user services.
 
 ## Configure standalone navigation
 

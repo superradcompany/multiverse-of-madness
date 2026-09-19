@@ -368,6 +368,19 @@ Existing learning baselines keep their original identity. Live migration with Je
 and VM preparation remains unqualified; no historical user session was migrated.
 Doodle Shooter is a candidate, not an already working or source-accessible adapter.
 
+Chess ownership recovery (2026-09-19): CLI and web entrypoints now share a local
+process lease plus a version-2 exclusive owner marker. A killed ownership-fixture
+process leaves its marker behind; a new owner acquires the released kernel lease,
+verifies the matching host/directory and absent PID, and reopens without changing
+the saved data. Legacy markers remain manual-recovery cases, and older hosts
+continue refusing existing markers. Tests also reject active owners, canonical
+path aliases, malformed/foreign markers and symlinks, and preserve replacement
+files during release. The real CLI creates and reopens a session with the
+deterministic fixture model; its saved state stays unchanged. No demo server,
+real model or VM was started. This establishes local ownership recovery;
+managed real-game isolation still needs qualification. All 498 application tests
+and type checking passed.
+
 ## 6. Resolve performance and sustained-operation concerns
 
 - [x] Implement owned background loser cleanup for automatic promotion. The winner
