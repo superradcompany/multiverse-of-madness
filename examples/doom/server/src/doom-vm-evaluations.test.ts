@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TypeSafeClient } from '@typesafe-ai/sdk';
 import type { EvaluationContract } from '@multiverse/gameplay-harness';
-import { ExecutableStore } from '@multiverse/gameplay-harness/node';
+import { contentRevision, ExecutableStore } from '@multiverse/gameplay-harness/node';
 import { DoomVmEvaluations, type DoomVmScenario } from './doom-vm-evaluations.ts';
 import { DoomLearningModels, doomLearningArtifact } from './doom-learning-models.ts';
 import { doomSurvivalProgress } from './doom-revision-evaluation.ts';
@@ -14,6 +14,22 @@ import { Session, sessionContinuation } from './session.ts';
 import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import { doomIncidentCheckpoint, type DoomEvaluationVmPorts } from './doom-evaluation-vms.ts';
 import type { GameState } from '../../contracts/src/game.ts';
+import { Recordings } from './recordings.ts';
+import type { DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
+
+async function recordingFor(root: string, proposal: string, runId: string) {
+  const directory = join(root, proposal, 'runs', contentRevision('doom-evaluation-run', runId).version.slice(7));
+  const manifest: DoomEvaluationRecordingManifest = JSON.parse(await readFile(join(directory, 'recording.json'), 'utf8'));
+  assert.equal(manifest.state, 'finished'); assert.equal(manifest.error, undefined);
+  const recordings = new Recordings(join(directory, 'recordings')); await recordings.open();
+  assert.deepEqual(await recordings.path(manifest.path!.endpointId), manifest.path);
+  for (const segment of manifest.path!.segments) for (const [offset, tick] of segment.ticks.entries()) {
+    const frame = await recordings.get(segment.worldId, segment.firstFrame + offset);
+    assert.equal(frame.world.state.tick, tick);
+    assert.equal(JSON.parse(Buffer.from(frame.frame, 'base64').toString()).tick, tick);
+  }
+  return manifest;
+}
 
 async function fixture(completeFutures = false) {
   const root = await mkdtemp(join(tmpdir(), 'doom-vm-composition-'));
@@ -67,6 +83,9 @@ test('production evaluator composition writes a complete paired experiment, exer
     for (const run of report.runs) {
       assert.equal(run.evidence.session.objective, 'Stay alive');
       assert.equal(run.budget.entries.reduce((sum: number, entry: any) => sum + (entry.usage?.simulation ?? 0), 0), 56);
+      const recording = await recordingFor(f.root, f.request.proposalId, run.id);
+      assert.equal(recording.path!.frames, run.evidence.final.tick - run.evidence.initial.tick + 1);
+      assert.equal(recording.path!.lastTick, run.evidence.final.tick);
     }
     const resources = JSON.parse(await readFile(join(f.root, f.request.proposalId, 'resources.json'), 'utf8'));
     assert.ok(resources.runs.every((run: any) => run.closed && run.checkpoints.length && run.checkpoints.every((point: any) => point.released)));
@@ -95,6 +114,10 @@ test('sized allowance lets both sides complete a fork and pins the concrete cont
       assert.deepEqual(run.budget.spec, manifest.contract.budget);
       assert.ok(run.evidence.session.stats.seconds - run.evidence.initialStats.seconds >= 1);
       assert.ok(run.evidence.session.worlds.some((world: any) => world.role === 'archived'));
+      const recording = await recordingFor(f.root, f.request.proposalId, run.id);
+      assert.equal(recording.path!.missingHistory, false);
+      assert.ok(recording.path!.segments.length > 1, 'selected replay must include the parent and winning future');
+      assert.equal(recording.path!.frames, run.evidence.final.tick - run.evidence.initial.tick + 1);
     }
     assert.deepEqual(result.contract, f.request.contract);
     await new DoomVmEvaluations(f.options).recover();
@@ -120,6 +143,8 @@ test('cancellation produces incomplete evidence and cleans worlds/checkpoints be
     assert.equal(report.runs.length, 1); assert.equal(report.runs[0].status, 'cancelled');
     assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
     assert.equal(f.calls, 1);
+    const recording = await recordingFor(f.root, f.request.proposalId, report.runs[0].id);
+    assert.equal(recording.path!.frames, 1, 'cancelled before the first action: retain the actual starting frame only');
   } finally { await f.cleanup(); }
 });
 

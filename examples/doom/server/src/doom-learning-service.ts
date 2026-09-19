@@ -180,6 +180,11 @@ export class DoomLearningService {
     return this.previews.view(id, Boolean(job && ['queued', 'running', 'cancelling'].includes(job.status)));
   }
   evaluationFrame(digest: string) { return this.previews.frame(digest); }
+  async evaluationReplayFrames(id: string, runId: string, start: number, count: number) {
+    this.ready(); z.string().uuid().parse(id);
+    if (!this.supervisor!.overview().journal.proposals.some(proposal => proposal.id === id)) throw new Error('Unknown learning proposal');
+    return this.previews.replayFrames(id, runId, start, count);
+  }
 
   backgroundView(): BackgroundLearningView {
     const state = this.automation?.snapshot();

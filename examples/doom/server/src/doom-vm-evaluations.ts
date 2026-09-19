@@ -11,6 +11,7 @@ import { DoomEvaluationVms, decodeDoomEvaluationVms, doomIncidentCheckpointSchem
 import { qualifyDoomRevision, type DoomEvaluationContext, type DoomEvaluationEvidence } from './doom-revision-evaluation.ts';
 import type { DoomPolicy } from './doom-policy.ts';
 import type { DoomLearningModels } from './doom-learning-models.ts';
+import { openDoomEvaluationRecording } from './doom-evaluation-recording.ts';
 
 export interface DoomVmScenario { setup: Step[]; minimumSelectedTicks?: number; incident?: DoomIncidentCheckpoint; continuation?: SessionContinuation }
 export interface DoomVmEvaluationOptions {
@@ -88,6 +89,7 @@ export class DoomVmEvaluations {
         minimumSelectedTicks: scenario => scenario.input.minimumSelectedTicks ?? 0,
         create: (id, scenario, ledger, current) => resources.create(id, ledger, current, scenario.input.setup, scenario.input.incident),
         checkpoints: id => resources.checkpoints(id), cleanup: id => resources.cleanup(id),
+        recording: id => openDoomEvaluationRecording(join(directory, runPath(id))),
         measure: evidence => this.options.measure(evidence),
         persistSession: (id, value) => write(runPath(id) + '/session.json', value),
         persistBudget: (id, value) => write(runPath(id) + '/budget.json', value),

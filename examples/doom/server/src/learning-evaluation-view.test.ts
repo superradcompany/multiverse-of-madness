@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { contentRevision } from '@multiverse/gameplay-harness/node';
 import { LearningEvaluationReader } from './learning-evaluation-view.ts';
+import { openDoomEvaluationRecording } from './doom-evaluation-recording.ts';
+import type { SessionView, WorldView } from '../../contracts/src/session.ts';
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'evaluation-preview-')), id = randomUUID();
@@ -85,5 +87,53 @@ test('saved-position previews show new test gameplay time instead of counting th
     assert.equal(view.runs[0]!.stats!.seconds, 3);
     assert.equal(view.runs[0]!.stats!.kills, 4, 'route totals still include the inherited state');
     assert.equal(view.runs[0]!.scenarioId, 'saved-stuck-position');
+  } finally { await f.cleanup(); }
+});
+
+test('finished evaluation replay survives reader restart, crosses a selected fork, and never writes to storage', async () => {
+  const f = await fixture();
+  try {
+    const directory = join(f.directory, f.id, f.run('baseline'));
+    const writer = await openDoomEvaluationRecording(directory);
+    const root = { id: 'root', label: 'starting plan', role: 'main', state: { tick: 0, health: 99, kills: 2 }, private: 'hidden evidence' } as unknown as WorldView;
+    for (let tick = 0; tick <= 35; tick++) {
+      root.state.tick = tick;
+      await writer.record(root, Buffer.from(`root-${tick}`));
+    }
+    await writer.retainPath(root.id);
+    assert.equal((await f.reader.view(f.id, true)).runs[0]!.replay, undefined);
+    const runId = f.run('baseline').slice(5);
+    await assert.rejects(f.reader.replayFrames(f.id, runId, 0, 1));
+    const child = { ...root, id: 'winner', parentId: root.id, label: 'winning plan' };
+    for (let tick = 35; tick <= 80; tick++) {
+      child.state.tick = tick;
+      await writer.record(child, Buffer.from(`winner-${tick}`));
+    }
+    await writer.retainPath(child.id);
+    await writer.close({ worlds: [child], mainId: child.id } as SessionView);
+    const contents = async () => {
+      const paths = (await readdir(f.directory, { recursive: true, withFileTypes: true }))
+        .filter(entry => entry.isFile()).map(entry => join(entry.parentPath, entry.name)).sort();
+      return Promise.all(paths.map(async path => [path, await readFile(path, 'base64')]));
+    };
+    const before = await contents();
+    const reader = new LearningEvaluationReader(f.directory);
+    const view = await reader.view(f.id, false);
+    assert.deepEqual(view.runs[0]!.replay, { frames: 81, firstTick: 0, lastTick: 80, incomplete: false, error: undefined });
+    const frames = await reader.replayFrames(f.id, runId, 30, 35);
+    assert.deepEqual(frames.map(frame => frame.tick), Array.from({ length: 35 }, (_, index) => index + 30));
+    assert.deepEqual(frames.map(frame => Buffer.from(frame.frame, 'base64').toString()),
+      frames.map(frame => `${frame.tick <= 35 ? 'root' : 'winner'}-${frame.tick}`));
+    assert.ok(frames.every(frame => frame.health === 99 && frame.kills === 2));
+    assert.ok(!JSON.stringify(frames).includes('hidden evidence'));
+    assert.equal((await reader.replayFrames(f.id, runId, 70, 35)).length, 11);
+    for (const [start, count] of [[-1, 1], [81, 1], [0, 0], [0, 36], [.5, 1], [0, Infinity]]) {
+      await assert.rejects(reader.replayFrames(f.id, runId, start!, count!), /Invalid evaluation replay range/);
+    }
+    await assert.rejects(reader.replayFrames(f.id, '../manifest.json', 0, 1), /unavailable/);
+    await assert.rejects(reader.replayFrames(randomUUID(), runId, 0, 1), /unavailable/);
+    assert.deepEqual(await contents(), before, 'spectators never mutate recording or evaluation files');
+    await rm(join(directory, 'recording.json'));
+    await assert.rejects(reader.replayFrames(f.id, runId, 0, 1), /unavailable/, 'a cached replay cannot bypass removed publication');
   } finally { await f.cleanup(); }
 });

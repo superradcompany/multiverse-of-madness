@@ -129,6 +129,11 @@ handler = async (req, res) => {
   try {
     const evaluationPreview = /^\/api\/learning\/evaluations\/([a-f0-9-]{36})$/.exec(url.pathname);
     if (req.method === 'GET' && evaluationPreview) { respond(200, await learning.evaluationView(evaluationPreview[1]!)); return; }
+    const evaluationReplay = /^\/api\/learning\/evaluations\/([a-f0-9-]{36})\/replays\/([a-f0-9]{64})$/.exec(url.pathname);
+    if (req.method === 'GET' && evaluationReplay) {
+      respond(200, await learning.evaluationReplayFrames(evaluationReplay[1]!, evaluationReplay[2]!,
+        Number(url.searchParams.get('start') ?? 0), Number(url.searchParams.get('count') ?? 35))); return;
+    }
     const evaluationFrame = /^\/api\/learning\/evaluation-frames\/([a-f0-9]{64})$/.exec(url.pathname);
     if (req.method === 'GET' && evaluationFrame) {
       const frame = learning.evaluationFrame(evaluationFrame[1]!);

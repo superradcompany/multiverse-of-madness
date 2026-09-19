@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { EvaluationRunPreview, LearningEvaluationView } from '../../contracts/src/learning-evaluation.ts';
+import { EvaluationReplay } from './evaluation-replay.tsx';
 
 export function LearningEvaluation({ proposalId }: { proposalId: string }) {
   const [data, setData] = useState<LearningEvaluationView>(), [error, setError] = useState('');
@@ -29,8 +30,8 @@ export function LearningEvaluation({ proposalId }: { proposalId: string }) {
     </div>
     {data?.total ? <><progress aria-label="Evaluation run progress" value={data.finished} max={data.total} />
       <p className="evaluation-caption">{scenario === 'saved-stuck-position' ? 'Testing from the saved stuck position' : `Start ${data.scenarios.indexOf(scenario!) + 1} of ${data.scenarios.length}`} · runs execute one at a time under matching test limits.</p>
-      <div className="evaluation-pair">{data.runs.filter(run => run.scenarioId === scenario).map(run => <RunPreview key={run.id} run={run} />)}</div>
-      <small className="evaluation-caption">Saved gameplay previews update as test runs advance. Completed runs show their last captured frame. Your main session stays separate.</small>
+      <div className="evaluation-pair">{data.runs.filter(run => run.scenarioId === scenario).map(run => <RunPreview key={run.id} proposalId={proposalId} run={run} />)}</div>
+      <small className="evaluation-caption">Active runs show saved previews. Replay a finished run to watch its selected route from the test's starting position. Your main session stays separate.</small>
     </> : null}
     {error && <p role="alert" className="skill-error">{error}</p>}
   </section>;
@@ -39,22 +40,26 @@ const labels: Record<EvaluationRunPreview['status'], string> = {
   waiting: 'Waiting for its turn', running: 'Running', complete: 'Finished', error: 'Failed',
   cancelled: 'Cancelled', timeout: 'Timed out', interrupted: 'Interrupted', 'not-run': 'Not run',
 };
-function RunPreview({ run }: { run: EvaluationRunPreview }) {
+function RunPreview({ run, proposalId }: { run: EvaluationRunPreview; proposalId: string }) {
   const [worldId, setWorldId] = useState<string>();
+  const [replaying, setReplaying] = useState(false);
   const world = run.worlds.find(world => world.id === worldId) ?? run.worlds.find(world => world.role === 'main') ?? run.worlds[0];
   const stats = run.stats;
   return <article className="evaluation-run">
     <div className="evaluation-run-heading"><strong>{run.role === 'baseline' ? 'Current strategy' : 'Proposed improvement'}</strong><span className={run.status === 'running' ? 'evaluation-running' : ''}>{labels[run.status]}</span></div>
+    {run.replay && <button type="button" onClick={() => setReplaying(value => !value)}>{replaying ? 'Show last preview' : 'Replay selected route'}</button>}
+    {replaying && run.replay ? <EvaluationReplay proposalId={proposalId} runId={run.id} summary={run.replay} /> : <>
     <div className="evaluation-screen">{world?.frame ? <img src={'/api/learning/evaluation-frames/' + world.frame} alt={`${run.role === 'baseline' ? 'Current' : 'Proposed'} strategy, ${world.label}, saved tick ${world.tick}`} /> : <span>{run.status === 'running' ? 'Starting the game…' : labels[run.status]}</span>}</div>
     {world && <div className="evaluation-world"><span>{world.role === 'main' ? 'Selected route' : 'Trial future'} · {world.label}</span><small>tick {world.tick}</small></div>}
     {run.worlds.length > 1 && <select aria-label={`${run.role} preview world`} value={world?.id ?? ''} onChange={event => setWorldId(event.target.value)}>{run.worlds.map(world => <option key={world.id} value={world.id}>{world.role === 'main' ? 'Selected route' : 'Future'} · {world.label}</option>)}</select>}
+    </>}
     {run.options && <details className="evaluation-options" open={run.role === 'candidate'}><summary>Options ranked by Jev</summary>
       <ul>{run.options.entries.map(option => <li key={option.label}><span>{option.label}</span><small>{Math.round(option.probability * 100)}%{option.tested ? ' · tested' : ''}</small></li>)}</ul>
     </details>}
-    {stats && <dl className="evaluation-stats"><div><dt>Route kills</dt><dd>{stats.kills}</dd></div><div><dt>Health</dt><dd>{stats.health}</dd></div><div><dt>Areas</dt><dd>{stats.cells}</dd></div><div><dt>Gameplay</dt><dd>{stats.seconds.toFixed(1)}s</dd></div></dl>}
-    {world?.role === 'experiment' && <small>Trial: {world.health} health · {world.kills} map kills</small>}
+    {stats && <dl className="evaluation-stats" aria-label="Run outcome"><div><dt>Route kills</dt><dd>{stats.kills}</dd></div><div><dt>Health</dt><dd>{stats.health}</dd></div><div><dt>Areas</dt><dd>{stats.cells}</dd></div><div><dt>Gameplay</dt><dd>{stats.seconds.toFixed(1)}s</dd></div></dl>}
+    {!replaying && world?.role === 'experiment' && <small>Trial: {world.health} health · {world.kills} map kills</small>}
     {run.metrics?.score !== undefined && <p className="evaluation-score">Final score <strong>{run.metrics.score}</strong></p>}
-    <small className="evaluation-caption">{run.updatedAt ? `Frame saved ${new Date(run.updatedAt).toLocaleTimeString()}` : 'No captured frame yet'}{run.status === 'running' && run.stage ? ` · ${run.stage === 'error' ? 'finishing run' : run.stage}` : ''}</small>
+    {!replaying && <small className="evaluation-caption">{run.updatedAt ? `Frame saved ${new Date(run.updatedAt).toLocaleTimeString()}` : 'No captured frame yet'}{run.status === 'running' && run.stage ? ` · ${run.stage === 'error' ? 'finishing run' : run.stage}` : ''}</small>}
     {run.error && <p className="skill-error">{run.error}</p>}
   </article>;
 }

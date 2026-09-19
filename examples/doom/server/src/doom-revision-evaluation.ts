@@ -14,6 +14,7 @@ import type { Decision } from './jev.ts';
 import { Session, type SessionCheckpoint, type SessionContinuation } from './session.ts';
 import type { WorldRuntime } from './runtime.ts';
 import type { CheckpointAdapter } from './checkpoints.ts';
+import type { DoomRunRecording } from './doom-evaluation-recording.ts';
 
 export interface DoomEvaluationContext { maximumFutures?: number; objective: string; skills: AiSkill[]; overrides: PolicyPatch<DoomPolicy> }
 export interface DoomEvaluationEvidence {
@@ -34,6 +35,8 @@ export interface DoomEvaluationOptions<Input> {
   checkpoints?(runId: string, ledger: BudgetLedger, signal: AbortSignal): CheckpointAdapter;
   /** Idempotently join/release every owned world/checkpoint, including partial creation. Persist unfinished cleanup. */
   cleanup(runId: string): Promise<void>;
+  /** Optional footage owner; persistence and cleanup still run on failure/cancellation. */
+  recording?(runId: string): Promise<DoomRunRecording>;
   /** Identity must be covered by contract.evaluator. Never accept this function or weights from the candidate. */
   measure(evidence: DoomEvaluationEvidence): Record<string, number>;
   persistSession(runId: string, saved: SessionCheckpoint): Promise<void>;
@@ -96,7 +99,15 @@ export async function qualifyDoomRevision<Input>(request: QualificationRequest<D
       session.setPersistence(saved => options.persistSession(runId, saved));
       if (options.checkpoints) session.setCheckpointAdapter(options.checkpoints(runId, ledger, current));
       session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
+      let recording: DoomRunRecording | undefined;
+      const recordingChanged = (view: SessionView) => recording?.update(view);
       try {
+        recording = await options.recording?.(runId);
+        if (recording) {
+          session.setRecorder((world, frame) => recording!.record(world, frame));
+          session.setMainRecorder(id => recording!.retainPath(id));
+          session.on('change', recordingChanged);
+        }
         const source = await options.create(runId, scenario, ledger, current);
         const initial = await source.state();
         if (!initial.alive || initial.phase !== 'level') throw new Error('Evaluation scenario must start with a living player in a level');
@@ -128,7 +139,12 @@ export async function qualifyDoomRevision<Input>(request: QualificationRequest<D
         }
         return { ending: terminal ? 'terminal' : exhausted ? 'budget' : 'complete', evidence };
       } finally {
-        try { await session.close(); } finally { await options.cleanup(runId); }
+        try { await session.close(); }
+        finally {
+          session.removeListener('change', recordingChanged);
+          try { await recording?.close(session.snapshot()); }
+          finally { await options.cleanup(runId); }
+        }
       }
     },
     measure: evidence => options.measure(evidence),

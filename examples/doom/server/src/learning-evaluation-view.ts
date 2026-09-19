@@ -6,6 +6,8 @@ import { contentRevision } from '@multiverse/gameplay-harness/node';
 import type { EvaluationRun } from '@multiverse/gameplay-harness';
 import type { LearningEvaluationView, EvaluationRunPreview } from '../../contracts/src/learning-evaluation.ts';
 import type { SessionCheckpoint } from './session.ts';
+import type { DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
+import { DoomEvaluationReplay } from './doom-evaluation-replay.ts';
 type SavedPreview = { view: Pick<SessionCheckpoint['view'], 'stage' | 'stats' | 'decision'>; worlds: Array<Pick<SessionCheckpoint['worlds'][number], 'view' | 'frame'>> };
 type SavedResult = Pick<EvaluationRun<unknown>, 'status' | 'ending' | 'error' | 'metrics'>;
 
@@ -13,6 +15,7 @@ type SavedResult = Pick<EvaluationRun<unknown>, 'status' | 'ending' | 'error' | 
 export class LearningEvaluationReader {
   private readonly cache = new Map<string, { stamp: number; size: number; value: unknown }>();
   private readonly frames = new Map<string, Buffer>();
+  private readonly replays = new Map<string, { manifest: unknown; replay: DoomEvaluationReplay }>();
   constructor(private readonly directory: string) {}
 
   async view(proposalId: string, active: boolean): Promise<LearningEvaluationView> {
@@ -23,7 +26,7 @@ export class LearningEvaluationReader {
     const runs = await Promise.all(scenarios.flatMap(scenarioId => (['baseline', 'candidate'] as const).map(async role => {
       const runId = `${manifest!.value.contract.id}/${scenarioId}/${role}`;
       const id = contentRevision('doom-evaluation-run', runId).version.slice(7), directory = join(root, 'runs', id);
-      const [saved, result, budget] = await Promise.all([
+      const [saved, result, budget, recording] = await Promise.all([
         this.read<SavedPreview>(join(directory, 'session.json'), value => {
           const saved = value as SessionCheckpoint;
           return { view: { stage: saved.view.stage, stats: saved.view.stats, decision: saved.view.decision ? { ...saved.view.decision, evidence: undefined } : undefined },
@@ -34,12 +37,18 @@ export class LearningEvaluationReader {
           const { status, ending, error, metrics } = value as SavedResult; return { status, ending, error, metrics };
         }),
         this.info(join(directory, 'budget.json')),
+        this.read<DoomEvaluationRecordingManifest>(join(directory, 'recording.json')),
       ]);
       const started = Boolean(saved || budget), session = saved?.value;
       const view: EvaluationRunPreview = { id, scenarioId, role,
         status: result?.value.status ?? (started ? active ? 'running' : 'interrupted' : active ? 'waiting' : 'not-run'),
         updatedAt: saved?.stamp, stage: session?.view.stage,
         error: result?.value.error, ending: result?.value.ending, metrics: result?.value.metrics, worlds: [] };
+      const footage = recording?.value;
+      if (footage?.state === 'finished' && footage.path?.frames) {
+        const { frames, firstTick, lastTick, missingHistory } = footage.path;
+        view.replay = { frames, firstTick, lastTick, incomplete: missingHistory || Boolean(footage.error), error: footage.error };
+      }
       if (session?.view.stats) {
         const { health, armor, kills, items, cells, seconds, damage } = session.view.stats;
         const inheritedSeconds = (manifest?.value.contract.scenarios.find(scenario => scenario.id === scenarioId)?.input?.continuation?.stats?.ticks ?? 0) / 35;
@@ -60,6 +69,27 @@ export class LearningEvaluationReader {
     })));
     return { proposalId, active, scenarios, runs, total: scenarios.length * 2,
       finished: runs.filter(run => ['complete', 'error', 'cancelled', 'timeout'].includes(run.status)).length };
+  }
+
+  async replayFrames(proposalId: string, runId: string, start: number, count: number) {
+    // Derive the permitted run IDs from the evaluation contract, never from a path supplied by the caller.
+    z.string().uuid().parse(proposalId);
+    const manifest = await this.read<{ contract: { id: string; scenarios: Array<{ id: string }> } }>(join(this.directory, proposalId, 'manifest.json'));
+    const known = manifest?.value.contract.scenarios.some(scenario => ['baseline', 'candidate'].some(role =>
+      contentRevision('doom-evaluation-run', `${manifest.value.contract.id}/${scenario.id}/${role}`).version.slice(7) === runId));
+    if (!known) throw new Error('Evaluation replay is unavailable');
+    const directory = join(this.directory, proposalId, 'runs', runId);
+    const saved = await this.read<DoomEvaluationRecordingManifest>(join(directory, 'recording.json'));
+    if (!saved) throw new Error('Evaluation replay is unavailable');
+    let entry = this.replays.get(directory);
+    if (!entry || entry.manifest !== saved.value) {
+      entry = { manifest: saved.value, replay: new DoomEvaluationReplay(directory, saved.value) };
+      this.replays.set(directory, entry);
+    }
+    this.replays.delete(directory); this.replays.set(directory, entry);
+    // At most four 16 MiB decoded-segment caches, independent of historical run count.
+    while (this.replays.size > 4) this.replays.delete(this.replays.keys().next().value!);
+    return entry.replay.frames(start, count);
   }
 
   frame(digest: string): Buffer | undefined {

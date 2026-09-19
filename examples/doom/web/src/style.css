@@ -268,6 +268,12 @@ h2,h3,strong,b{font-weight:500}.icon.active,.primary{background:#9333ea;border-c
 .evaluation-run-heading { min-height: 36px; align-items: start; font-size: 14px; }
 .evaluation-run-heading span { color: #aaa2b7; font-size: 12px; }
 .evaluation-run-heading .evaluation-running { color: #bd9af4; }
+.evaluation-replay { display: grid; gap: 10px; min-width: 0; }
+.evaluation-replay input[type="range"] { width: 100%; min-width: 0; accent-color: #ad85ef; }
+.evaluation-run button { padding: 7px 10px; border: 1px solid #40344d; border-radius: 8px; font: inherit; font-size: 13px; color: #e5dcee; background: #19141f; cursor: pointer; }
+.evaluation-run > button { margin-bottom: 10px; }
+.evaluation-run button:hover { background: #2b203b; }
+.evaluation-replay .evaluation-toolbar { flex-wrap: wrap; }
 .evaluation-screen { display: flex; justify-content: center; align-items: center; aspect-ratio: 8 / 5; overflow: hidden; background: #060609; border-radius: 8px; }
 .evaluation-screen img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 .evaluation-screen > span { color: #a99fba; font-size: 14px; }

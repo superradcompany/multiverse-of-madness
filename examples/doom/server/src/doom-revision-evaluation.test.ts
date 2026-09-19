@@ -85,6 +85,27 @@ test('paired revision evaluation applies sparse user context, measures actual ro
   } finally { await f.cleanup(); }
 });
 
+test('failed recording finalization cannot skip runtime cleanup or qualify the run', async () => {
+  const f = await fixture();
+  const closed: string[] = [];
+  try {
+    f.options.recording = async id => ({
+      record: async () => {}, retainPath: async () => {}, update: () => {},
+      close: async () => { closed.push(id); throw new Error('Recording publication failed'); },
+    });
+    const result = await f.run();
+    assert.equal(result.accepted, false);
+    assert.equal(closed.length, 4);
+    assert.deepEqual(f.cleaned, closed);
+    for (const run of f.comparison.runs) {
+      assert.equal(run.status, 'error');
+      assert.equal(run.metrics, undefined);
+      assert.match(run.error!, /Recording publication failed/);
+    }
+    for (const list of f.worlds.values()) for (const world of list) await assert.rejects(world.state(), /destroyed/);
+  } finally { await f.cleanup(); }
+});
+
 test('independent evaluation executes candidate motor settings while keeping the baseline unchanged', async () => {
   const f = await fixture();
   try {

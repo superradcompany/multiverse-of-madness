@@ -6,6 +6,11 @@ import { gunzip } from 'node:zlib';
 import type { Recordings } from './recordings.ts';
 
 type Frame = Awaited<ReturnType<Recordings['get']>>;
+/** Live stores and finalized manifests supply the same retained-frame boundary. */
+export interface RecordingReadOwner {
+  list(): { worlds: Array<{ id: string; firstFrame: number; frames: number }> };
+  get: Recordings['get'];
+}
 type Index = { id: string; firstFrame?: number; segments: Array<{ file: string; count: number }> };
 const decompress = promisify(gunzip);
 
@@ -15,7 +20,7 @@ export class RecordingReader {
   private readonly segments = new Map<string, { frames: Frame[]; bytes: number }>();
   private readonly loading = new Map<string, Promise<Frame[]>>();
   private bytes = 0;
-  constructor(private readonly root: string, private readonly owner: Recordings, private readonly maxBytes = 16 * 1024 * 1024) {}
+  constructor(private readonly root: string, private readonly owner: RecordingReadOwner, private readonly maxBytes = 16 * 1024 * 1024) {}
 
   async get(id: string, frame: number): Promise<Frame> {
     this.requireRetained(id, frame);

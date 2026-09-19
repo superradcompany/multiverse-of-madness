@@ -321,12 +321,34 @@ footage. Type checking, 129 harness tests, 412 application tests and the product
 build passed. Live rollout and broader recording/GC qualification remain
 outstanding; the demo and VMs remain stopped.
 
+Doom evaluation playback (2026-09-19): new supervisor test runs record every
+captured frame through a bounded queue and publish a versioned selected-route
+manifest at finalization. The comparison viewer now offers play/pause and seeking
+for those runs, including selected ancestry across forks. The read-only endpoint
+checks proposal/run ownership, limits batches to 35 frames and projects only
+image/tick/basic stats; it never opens a mutable recording store. Decoded segment
+caches are bounded. Discarded evaluation footage is collected at finalization;
+selected routes remain retained. Older runs keep their sampled previews because
+missing footage cannot be reconstructed.
+
+Controlled evaluator tests cover exact frames, fork continuity, cancellation,
+cleanup after recording-publication failure, reopening and discarded-footage
+collection. Reader tests verify that playback leaves durable files unchanged and
+refuses removed publications. A browser fixture exercised playback to the end,
+seek across a fork, pause across polling updates, independent comparison playback,
+missing-footage errors and a 390px layout without horizontal overflow. This is
+offline evidence, not a live VM/performance qualification. Abrupt-process recovery
+of unfinished evaluation recordings and integrated live replay/GC checks remain
+outstanding; no demo host or VM was started. Type checking, 416 application
+tests, four web tests and the production build passed.
+
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,
   live play vs replay, current control owner and supervisor status.
 - [ ] Verify supervision works without manual proposal/test/activation controls and
   applied changes appear as concise commentary.
 - [ ] Complete continuous recordings/replay for supervisor comparison runs;
-  Doom still has sampled previews rather than full gameplay video. Chess now
+  Doom now captures full selected routes and exposes playback for newly finalized
+  test runs; live qualification and unfinished-recording recovery remain. Chess now
   exposes selected-path board replay, play/pause/seeking and position selection,
   plus live trial previews. Real saved audit playback and responsive layouts
   were checked; live preview delivery has controlled-session tests. The latest
