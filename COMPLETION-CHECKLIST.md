@@ -136,6 +136,17 @@ invalidates checkpoint goals when the user's objective has changed, keeps the
 original deadline and persists the result across another restart. No VM or demo
 server was restarted for these final checks.
 
+Repeat-review correction (2026-09-19): an unchanged failure cluster no longer
+requires selected gameplay to advance when all futures are rejected or plans stop
+before taking an input. After the existing five-minute cooldown, three fresh failed
+outcomes plus 60 attempted game seconds, or 12 fresh plan failures, can trigger
+another review. Old evidence and wall time alone still cannot. The newest issue
+is now kept last in the persisted issue history so renewed missing-plan/stall
+reviews request a planner rather than inheriting an older guidance-only type.
+Three detector regressions fail against the previous code; an offline service
+restart test dispatches a planner request without moving the main run. No real
+supervisor, model or VM was invoked; useful autonomous recovery remains unverified.
+
 Doom still has hand-written seed strategies. Generated planner `19db5d37-f130-4285-85dc-a6fe7c68f8a3`
 qualified on three opening cases (mean gain 45.67) and activated automatically.
 That establishes a working replacement path, not robust gameplay or recovery

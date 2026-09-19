@@ -609,3 +609,34 @@ test('exhausted historical live limits retain accounting while new gameplay cont
     assert.equal(await readFile(path, 'utf8'), bytes);
   } finally { await f.cleanup(); }
 });
+
+test('reopened automation requests a planner after fresh zero-tick failures, despite an older guidance issue', async () => {
+  const { writeFile } = await import('node:fs/promises');
+  const { observeDoomLearning, supervisorPersistentReviewIntervalMs } = await import('./doom-autonomous-learning.ts');
+  const f = await fixture();
+  try {
+    f.session.setRecorder(async () => { void f.session.pause(); });
+    f.session.resume(); await f.session.idle(); await f.session.pause();
+    await f.service.enable(); f.session.setPlanningMode('plans');
+    const view = f.session.snapshot(); view.stats!.attempts.planFailures = 3;
+    const earlier = observeDoomLearning(view, undefined, Date.now() - supervisorPersistentReviewIntervalMs - 1000)!;
+    earlier.mark.issues.push('failed-outcomes');
+    const saved = f.session.checkpoint(); saved.attempts!.planFailures = 15;
+    await f.store.save(saved); await f.service.close();
+    await writeFile(join(f.directory, 'automation.json'), JSON.stringify({ version: 1, enabled: true, lastObservation: earlier.mark }));
+    f.options.backgroundLearning = true;
+    await f.reopen();
+    const deadline = Date.now() + 10000;
+    while (!f.requests.length) {
+      assert.ok(Date.now() < deadline, JSON.stringify(f.service.view().automation));
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.equal(f.requests[0]!.requestedKind, 'planner');
+    assert.equal(f.session.snapshot().stats!.seconds, earlier.mark.selectedSeconds, 'review must not require advancing the main run');
+    await settled(f.service);
+    // The fixture provider supplies guidance, not planner code. Verify dispatch,
+    // not successful generation/evaluation or useful gameplay recovery.
+    await f.service.setAutomation(false, 'codex'); await f.reopen();
+    assert.equal(f.providerCalls, 1);
+  } finally { await f.cleanup(); }
+});

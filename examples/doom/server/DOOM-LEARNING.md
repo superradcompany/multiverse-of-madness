@@ -27,10 +27,14 @@ for the overall flow.
    current strategy. Jev uses the active revision on subsequent decisions.
 
 The current Doom review detector enforces at least two wall-clock minutes between
-reviews. Repeated unchanged stalls additionally require five wall-clock minutes
-and new selected-route gameplay evidence. These are scheduling rules, not promises
-that every failure will be diagnosed or resolved. Goal edits are coalesced, and
-repeated failed proposals remain visible in the history.
+reviews. Reviewing the same issue again requires five wall-clock minutes plus
+fresh evidence: 60 more selected game seconds while stalled, at least three new
+failed outcomes across 60 attempted game seconds, or 12 new failed plans. The
+latter paths cover rejected futures and plans that fail before advancing the game.
+Consumed counters persist across restart; elapsed time alone does not repeat a
+review. The latest issue determines whether conditional play needs new plans.
+These are scheduling rules, not promises that every failure will be diagnosed or
+resolved. Goal edits are coalesced, and failed proposals remain in the history.
 
 ## What the supervisor may change
 

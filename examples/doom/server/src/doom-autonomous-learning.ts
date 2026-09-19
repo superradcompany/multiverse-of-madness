@@ -47,14 +47,17 @@ export function observeDoomLearning(view: SessionView, previous?: DoomLearningMa
   // learned revision, map, meaningful route progress or resource deterioration permits new analysis.
   const key = learningKey(view);
   if (key === before?.key && before.issues.includes(issue)) {
-    // Repeated unsuccessful play is fresh evidence, even when the room, score
-    // and health band do not change. Bound paid reviews by both wall and game time.
-    const sustained = (stats.stalledSeconds ?? 0) >= 60 && before.observedAt !== undefined
-      && now - before.observedAt >= supervisorPersistentReviewIntervalMs
-      && before.selectedSeconds !== undefined && stats.seconds - before.selectedSeconds >= 60;
-    if (!sustained) return;
+    // Failed futures and zero-tick plan stops may never advance the selected
+    // clock. Count fresh adverse work too, while keeping the longer cooldown.
+    const selectedPlay = (stats.stalledSeconds ?? 0) >= 60 && before.selectedSeconds !== undefined
+      && stats.seconds - before.selectedSeconds >= 60;
+    const failedTrials = failures - before.failures >= 3 && seconds - before.seconds >= 60;
+    const failedPlans = planFailures - before.planFailures >= 12;
+    if (before.observedAt === undefined || now - before.observedAt < supervisorPersistentReviewIntervalMs
+      || !(selectedPlay || failedTrials || failedPlans)) return;
   }
-  return { mark: { key, objective: view.objective, issues: key === before?.key ? [...new Set<DoomLearningMark['issues'][number]>([...before.issues, issue])] : [issue], seconds, selectedSeconds: stats.seconds, failures, planFailures, observedAt: now }, reason: issue === 'goal-changed' ? 'The user changed the goal; adapt guidance and available options to the current objective while preserving its constraints' : issue === 'strategy-bootstrap' ? 'Create a reusable candidate planner from the game contract and initial observed play' : issue === 'plan-coverage'
+  // The job owner reads the last issue to choose planner versus guidance.
+  return { mark: { key, objective: view.objective, issues: key === before?.key ? [...new Set<DoomLearningMark['issues'][number]>([...before.issues.filter(previousIssue => previousIssue !== issue), issue])] : [issue], seconds, selectedSeconds: stats.seconds, failures, planFailures, observedAt: now }, reason: issue === 'goal-changed' ? 'The user changed the goal; adapt guidance and available options to the current objective while preserving its constraints' : issue === 'strategy-bootstrap' ? 'Create a reusable candidate planner from the game contract and initial observed play' : issue === 'plan-coverage'
     ? 'Repeated obstructed, unreachable or timed-out plans suggest a missing candidate or route'
     : issue === 'failed-outcomes' ? 'Repeated failed futures, rejected outcomes or rollbacks need strategic review'
     : 'The selected route has made no useful progress for at least 15 game seconds' };

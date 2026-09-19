@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { observeDoomLearning, doomAutonomousState, supervisorReviewIntervalMs, DoomGoalReview, doomAutomaticProposalKind } from './doom-autonomous-learning.ts';
+import { observeDoomLearning, doomAutonomousState, supervisorReviewIntervalMs, supervisorPersistentReviewIntervalMs, DoomGoalReview, doomAutomaticProposalKind } from './doom-autonomous-learning.ts';
 import { Session } from './session.ts';
 import { decision, Runtime } from '../test-support/fixture-runtime.ts';
 
-test('healthy play makes no supervisor calls; unchanged failure clusters are analyzed at most once per issue type', async () => {
+test('healthy play makes no supervisor calls; unchanged failure clusters are coalesced', async () => {
   const session = new Session({ decide: async () => decision }); await session.initialize(new Runtime('root'));
   const view = session.snapshot(); assert.equal(observeDoomLearning(view), undefined);
   view.stats!.attempts.seconds = 600; assert.equal(observeDoomLearning(view), undefined);
@@ -184,4 +184,64 @@ test('a newly applied planner needs new failure evidence and review spacing befo
   assert.equal(observeDoomLearning(view, mark, now + supervisorReviewIntervalMs)!.mark.issues[0], 'plan-coverage', 'fresh zero-tick failures still escalate');
   assert.equal(old.mark.planFailures, 100, 'original incident evidence stays unchanged');
   assert.throws(() => doomActivationObservation({ ...view, stats: undefined }), /current main world/);
+});
+
+test('fresh rejected trials can trigger a bounded repeat review without selected progress', async () => {
+  const session = new Session({ decide: async () => decision }); await session.initialize(new Runtime('root'));
+  const view = session.snapshot();
+  view.stats!.attempts.rejectedBatches = 3; view.stats!.attempts.seconds = 60;
+  const first = observeDoomLearning(view, undefined, 1000)!;
+  const now = 1000 + supervisorPersistentReviewIntervalMs;
+  assert.equal(first.mark.issues.at(-1), 'failed-outcomes');
+  assert.equal(observeDoomLearning(view, first.mark, now), undefined, 'wall time alone is not new evidence');
+  view.stats!.attempts.seconds += 60;
+  assert.equal(observeDoomLearning(view, first.mark, now), undefined, 'trial time alone cannot repeat this review');
+  view.stats!.attempts.rejectedBatches += 3;
+  assert.equal(observeDoomLearning(view, first.mark, now - 1), undefined);
+  const repeated = observeDoomLearning(view, first.mark, now)!;
+  assert.equal(repeated.mark.selectedSeconds, first.mark.selectedSeconds);
+  assert.equal(repeated.mark.key, first.mark.key);
+  assert.equal(repeated.mark.issues.at(-1), 'failed-outcomes');
+  const saved = doomAutonomousState.parse({ version: 1, enabled: true, lastObservation: repeated.mark });
+  assert.equal(observeDoomLearning(view, saved.lastObservation, now + supervisorPersistentReviewIntervalMs), undefined, 'restart cannot reuse consumed failures');
+});
+
+test('fresh zero-tick plan failures can reopen review while preserving cooldown and latest issue kind', async () => {
+  const session = new Session({ decide: async () => decision }); await session.initialize(new Runtime('root'));
+  const view = session.snapshot(); view.planningMode = 'plans';
+  view.stats!.attempts.planFailures = 3;
+  const first = observeDoomLearning(view, undefined, 1000)!;
+  // Another observed issue was reviewed more recently for this same state.
+  view.stats!.attempts.rejectedBatches = 3;
+  const other = observeDoomLearning(view, first.mark, 1000 + supervisorReviewIntervalMs)!;
+  assert.deepEqual(other.mark.issues, ['plan-coverage', 'failed-outcomes']);
+  const now = other.mark.observedAt! + supervisorPersistentReviewIntervalMs;
+  view.stats!.attempts.planFailures += 11;
+  assert.equal(observeDoomLearning(view, other.mark, now), undefined, 'require a substantial new cluster');
+  view.stats!.attempts.planFailures++;
+  assert.equal(observeDoomLearning(view, other.mark, now - 1), undefined);
+  const repeated = observeDoomLearning(view, other.mark, now)!;
+  assert.equal(repeated.mark.seconds, 0); assert.equal(repeated.mark.selectedSeconds, 0);
+  assert.deepEqual(repeated.mark.issues, ['failed-outcomes', 'plan-coverage']);
+  assert.equal(doomAutomaticProposalKind(repeated.mark.issues.at(-1), view.planningMode), 'planner');
+  assert.equal(doomAutomaticProposalKind(repeated.mark.issues.at(-1), 'actions'), 'guidance');
+  assert.match(repeated.reason, /missing candidate or route/);
+  const saved = doomAutonomousState.parse({ version: 1, enabled: true, lastObservation: repeated.mark });
+  assert.equal(observeDoomLearning(view, saved.lastObservation, now + supervisorPersistentReviewIntervalMs), undefined);
+  view.stats!.attempts.planFailures += 12;
+  assert.ok(observeDoomLearning(view, saved.lastObservation, now + supervisorPersistentReviewIntervalMs));
+});
+
+test('a renewed selected-path stall stays the latest issue after a different failure review', async () => {
+  const session = new Session({ decide: async () => decision }); await session.initialize(new Runtime('root'));
+  const view = session.snapshot(); view.planningMode = 'plans';
+  view.stats!.seconds = 60; view.stats!.attempts.seconds = 240; view.stats!.stalledSeconds = 60;
+  const first = observeDoomLearning(view, undefined, 1000)!;
+  view.stats!.attempts.deaths = 3;
+  const other = observeDoomLearning(view, first.mark, 1000 + supervisorReviewIntervalMs)!;
+  assert.deepEqual(other.mark.issues, ['stalled-progress', 'failed-outcomes']);
+  view.stats!.seconds += 60; view.stats!.attempts.seconds += 240;
+  const repeated = observeDoomLearning(view, other.mark, other.mark.observedAt! + supervisorPersistentReviewIntervalMs)!;
+  assert.equal(repeated.mark.issues.at(-1), 'stalled-progress');
+  assert.equal(doomAutomaticProposalKind(repeated.mark.issues.at(-1), view.planningMode), 'planner');
 });
