@@ -28,6 +28,8 @@ export class ReplayStore<World extends ReplayWorld> {
   error?: string;
   private protectedIds = new Set<string>();
   private collected = 0;
+  private readonly pendingCleanup = new Map<string, { id: string; segment: Segment }>();
+  private cleanupError?: string;
   constructor(private root: string, private readonly layout: ReplayLayout<World>, private limit = 1024 ** 3,
     private retention = { maxAgeMs: 24 * 60 * 60 * 1000, maxWorlds: 200 }) {
     if (!Number.isSafeInteger(layout.framesPerSegment) || layout.framesPerSegment < 1) throw new Error('Invalid replay segment size');
@@ -92,7 +94,7 @@ export class ReplayStore<World extends ReplayWorld> {
   private async flushEntry(entry: Entry<World>) {
     if (!entry.pending.length) return;
     const body = await compress(JSON.stringify(entry.pending));
-    await this.collectInternal(entry.index.selected ? 0 : body.length);
+    await this.collectSafely(entry.index.selected ? 0 : body.length);
     if (!entry.index.selected && !this.protectedIds.has(entry.index.id) && this.cacheBytes() + body.length > this.limit) {
       this.error = 'Recording storage limit reached. Existing recordings are preserved.';
       this.discardUncommitted();
@@ -113,17 +115,37 @@ export class ReplayStore<World extends ReplayWorld> {
     await writeFile(join(directory, 'index.json.tmp'), JSON.stringify(index), { mode: 0o600 });
     await rename(join(directory, 'index.json.tmp'), join(directory, 'index.json'));
   }
-  async collect() { await this.enqueue(() => this.collectInternal()); }
+  async collect() { await this.enqueue(() => this.collectSafely()); }
+  private async collectSafely(reserve = 0) {
+    try { await this.collectInternal(reserve); this.cleanupError = undefined; }
+    catch (error) {
+      // Cleanup is retryable maintenance, not a recording failure. Never discard
+      // buffered winner footage because a disposable segment could not be removed.
+      this.cleanupError = `Recording cleanup deferred: ${error instanceof Error ? error.message : 'storage failure'}`;
+    }
+  }
+  private queueCleanup(id: string, segments: Segment[]) {
+    for (const segment of segments) this.pendingCleanup.set(join(this.directory(id), segment.file), { id, segment });
+  }
+  private async retryCleanup() {
+    for (const [path, { segment }] of this.pendingCleanup) {
+      await rm(path, { force: true });
+      this.pendingCleanup.delete(path); this.bytes -= segment.bytes; this.collected++;
+    }
+  }
   private async collectInternal(reserve = 0) {
+    await this.retryCleanup();
     const inactive = [...this.worlds.values()].filter(e => !e.index.selected && !this.protectedIds.has(e.index.id) && !e.pending.length)
       .sort((a, b) => (a.index.times.at(-1) ?? 0) - (b.index.times.at(-1) ?? 0));
     for (const entry of inactive) {
       if ([...this.worlds.values()].filter(e => !e.index.selected).length <= this.retention.maxWorlds && (entry.index.times.at(-1) ?? Date.now()) >= Date.now() - this.retention.maxAgeMs) continue;
       const old = entry.index.segments;
       // Publish an empty index before deleting data. A crash cannot resurrect it.
-      entry.index = { ...entry.index, firstFrame: (entry.index.firstFrame ?? 0) + entry.index.ticks.length, segments: [], ticks: [], times: [] };
-      await this.saveIndex(entry.index);
-      for (const segment of old) { await rm(join(this.directory(entry.index.id), segment.file), { force: true }); this.bytes -= segment.bytes; this.collected++; }
+      const index = { ...entry.index, firstFrame: (entry.index.firstFrame ?? 0) + entry.index.ticks.length, segments: [], ticks: [], times: [] };
+      await this.saveIndex(index);
+      entry.index = index;
+      this.queueCleanup(index.id, old);
+      await this.retryCleanup();
       await rm(this.directory(entry.index.id), { recursive: true, force: true });
       this.worlds.delete(entry.index.id);
     }
@@ -138,15 +160,17 @@ export class ReplayStore<World extends ReplayWorld> {
         segments: entry.index.segments.slice(1), ticks: entry.index.ticks.slice(segment.count), times: entry.index.times.slice(segment.count) };
       // Pending frames are memory-only; never publish them into the disk index.
       await this.saveIndex({ ...index, ticks: index.ticks.slice(0, index.ticks.length - entry.pending.length), times: index.times.slice(0, index.times.length - entry.pending.length) });
-      await rm(join(this.directory(index.id), segment.file), { force: true });
-      entry.index = index; this.bytes -= segment.bytes; this.collected++;
+      entry.index = index;
+      this.queueCleanup(index.id, [segment]);
+      await this.retryCleanup();
     }
   }
   async flush() { await this.enqueue(async () => { if (!this.error) for (const e of this.worlds.values()) { if (this.error) break; await this.flushEntry(e); } }); }
-  list() { return { error: this.error, bytes: this.bytes, retainedBytes: this.bytes - this.cacheBytes(), limit: this.limit, collectedSegments: this.collected, retentionHours: this.retention.maxAgeMs / 3600000, worlds: [...this.worlds.values()].filter(e => e.index.ticks.length > 0).map(({ index }) => ({ id: index.id, label: index.label, parentId: index.parentId, selected: index.selected ?? false, frames: index.ticks.length, firstFrame: index.firstFrame ?? 0, firstTick: index.ticks[0], lastTick: index.ticks.at(-1) })) }; }
+  list() { return { error: this.error, cleanupError: this.cleanupError, bytes: this.bytes, retainedBytes: this.bytes - this.cacheBytes(), limit: this.limit, collectedSegments: this.collected, retentionHours: this.retention.maxAgeMs / 3600000, worlds: [...this.worlds.values()].filter(e => e.index.ticks.length > 0).map(({ index }) => ({ id: index.id, label: index.label, parentId: index.parentId, selected: index.selected ?? false, frames: index.ticks.length, firstFrame: index.firstFrame ?? 0, firstTick: index.ticks[0], lastTick: index.ticks.at(-1) })) }; }
   private cacheBytes() {
     return [...this.worlds.values()].filter(e => !e.index.selected)
-      .reduce((total, e) => total + e.index.segments.reduce((sum, segment) => sum + segment.bytes, 0), 0);
+      .reduce((total, e) => total + e.index.segments.reduce((sum, segment) => sum + segment.bytes, 0),
+        [...this.pendingCleanup.values()].reduce((total, pending) => total + pending.segment.bytes, 0));
   }
   /** Retain and publish selected ancestry, including buffered frames, before acknowledging selection/checkpointing. */
   async retainPath(id: string) {
@@ -183,9 +207,12 @@ export class ReplayStore<World extends ReplayWorld> {
         if (worldId === id) continue;
         await rm(this.directory(worldId), { recursive: true, force: true });
         this.bytes -= entry.index.segments.reduce((sum, segment) => sum + segment.bytes, 0);
+        for (const [path, pending] of this.pendingCleanup) {
+          if (pending.id === worldId) { this.bytes -= pending.segment.bytes; this.pendingCleanup.delete(path); }
+        }
         this.worlds.delete(worldId);
       }
-      this.error = undefined; this.collected = 0;
+      this.error = undefined; this.cleanupError = undefined; this.collected = 0;
       this.protectedIds = new Set([id]);
     });
     this.chain = task.catch(() => {});

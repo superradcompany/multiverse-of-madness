@@ -373,6 +373,14 @@ Doodle Shooter is a candidate, not an already working or source-accessible adapt
   checkpoints while reclaiming disposable data. Selected full-session recordings
   remain until explicit user reset/deletion, not silent retention expiry.
 
+Offline replay cleanup qualification (2026-09-19): failed index publication now
+leaves existing footage available, and failed segment deletion is retried without
+stopping selected recording or double-subtracting bytes. Five filesystem-failure
+regressions cover publication, partial world deletion, rolling segment deletion,
+restart recovery and explicit reset. Selected footage remains readable after
+reopen. The three publication/deletion tests fail against the previous code.
+The replay format is unchanged; this does not complete the live GC/VM soak gate.
+
 Offline performance attribution (2026-09-19): the new executor analyzer matches
 receipt start times to a delivery-observer window, separates statuses/revisions
 and preserves missing phase measurements as unknown. The matching archived

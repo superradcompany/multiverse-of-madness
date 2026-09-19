@@ -116,6 +116,14 @@ format is unchanged. This protects acknowledged selection/checkpoint footage
 across process restart, not power loss; it cannot restore previously missing
 history or footage discarded after a recording error.
 
+Replay cleanup publishes the retained index before dropping frames from memory.
+Failed maintenance is reported separately as `list().cleanupError`, and retried
+on collection or the next segment flush. It does not discard buffered frames or
+set the recording-write error. Bytes awaiting deletion still count against the
+cache limit; selected ancestry remains exempt. Restart reclaims files omitted
+from the published index, using the existing recording format. Explicit reset
+also clears pending deletions for the removed worlds.
+
 `runTrials` uses seconds or turns, never a fixed game tick rate. Adapters must
 honor cancellation before issuing another input and settle already-dispatched
 work before returning. A failed sibling cancels the group; all work is joined

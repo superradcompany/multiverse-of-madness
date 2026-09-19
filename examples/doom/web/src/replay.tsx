@@ -34,7 +34,7 @@ export function useReplay() {
         const response = await fetch('/api/recordings');
         if (!response.ok) throw new Error('Could not load recordings');
         const data = await response.json();
-        if (!stopped) { setWorlds(data.worlds); setRecordingError(data.error ?? ''); }
+        if (!stopped) { setWorlds(data.worlds); setRecordingError(data.error ?? (data.cleanupError ? 'Recording cleanup will retry. Gameplay recording can continue.' : '')); }
       } catch (e) { if (!stopped) setRecordingError(e instanceof Error ? e.message : 'Recording unavailable'); }
     };
     void refresh(); const timer = setInterval(refresh, 3000);
