@@ -337,10 +337,26 @@ collection. Reader tests verify that playback leaves durable files unchanged and
 refuses removed publications. A browser fixture exercised playback to the end,
 seek across a fork, pause across polling updates, independent comparison playback,
 missing-footage errors and a 390px layout without horizontal overflow. This is
-offline evidence, not a live VM/performance qualification. Abrupt-process recovery
-of unfinished evaluation recordings and integrated live replay/GC checks remain
-outstanding; no demo host or VM was started. Type checking, 416 application
-tests, four web tests and the production build passed.
+offline evidence, not a live VM/performance qualification. Integrated live
+replay/GC checks remain outstanding; no demo host or VM was started. Type checking,
+416 application tests, four web tests and the production build passed.
+
+Interrupted Doom evaluation recordings (2026-09-19): evaluator startup now
+recovers footage only after recovering owned VM resources. It derives admitted
+run IDs from the saved contract and uses the saved session's main ID and position
+to rebuild the available selected path. Retained future footage alone never
+establishes a winner. Recovery publishes an explicitly interrupted/partial replay,
+collects disposable footage when the main route is known, preserves ambiguous
+footage, and leaves evaluation results and one-shot admission unchanged. Unknown
+formats are refused before recording mutation; failed publication can be retried.
+
+A SIGKILL test recovers 36 committed frames and reports the five buffered frames
+that were lost. Other tests cover a selected fork and its ancestors, a newer but
+uncommitted future, missing session state, idempotence, publication retry and
+startup integration with zero model/runtime dispatch. These are offline file and
+process tests, not power-loss durability or a live VM qualification. Type checking,
+422 application tests and the production build passed; demo hosts and VMs remain
+stopped.
 
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,
   live play vs replay, current control owner and supervisor status.
@@ -348,7 +364,7 @@ tests, four web tests and the production build passed.
   applied changes appear as concise commentary.
 - [ ] Complete continuous recordings/replay for supervisor comparison runs;
   Doom now captures full selected routes and exposes playback for newly finalized
-  test runs; live qualification and unfinished-recording recovery remain. Chess now
+  test runs, including interrupted-run recovery; live qualification remains. Chess
   exposes selected-path board replay, play/pause/seeking and position selection,
   plus live trial previews. Real saved audit playback and responsive layouts
   were checked; live preview delivery has controlled-session tests. The latest

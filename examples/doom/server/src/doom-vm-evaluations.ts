@@ -12,6 +12,7 @@ import { qualifyDoomRevision, type DoomEvaluationContext, type DoomEvaluationEvi
 import type { DoomPolicy } from './doom-policy.ts';
 import type { DoomLearningModels } from './doom-learning-models.ts';
 import { openDoomEvaluationRecording } from './doom-evaluation-recording.ts';
+import { recoverDoomEvaluationRecordings } from './doom-evaluation-recording-recovery.ts';
 
 export interface DoomVmScenario { setup: Step[]; minimumSelectedTicks?: number; incident?: DoomIncidentCheckpoint; continuation?: SessionContinuation }
 export interface DoomVmEvaluationOptions {
@@ -46,13 +47,18 @@ export class DoomVmEvaluations {
       const entries = await readdir(this.options.directory, { withFileTypes: true }).catch(error => {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error;
       });
+      const directories: string[] = [];
       for (const entry of entries) {
         if (!z.string().uuid().safeParse(entry.name).success) continue;
         if (!entry.isDirectory()) throw new Error('Evaluation job path must be a directory, not a link or file');
         const store = this.resourceStore(entry.name);
         // A crash before resource admission can leave only the immutable request manifest.
         if (await store.load()) await DoomEvaluationVms.open(store, this.options.runtime);
+        directories.push(join(this.options.directory, entry.name));
       }
+      // Finish resource cleanup first; a malformed recording must not prevent
+      // cleanup of later jobs. Footage recovery never recreates a game world.
+      for (const directory of directories) await recoverDoomEvaluationRecordings(directory);
     } finally { this.recovering = false; }
   }
 

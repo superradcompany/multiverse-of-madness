@@ -4,6 +4,8 @@ import type { ReplayPath } from '@multiverse/gameplay-harness';
 import type { SessionView, WorldView } from '../../contracts/src/session.ts';
 import { BufferedRecorder } from './buffered-recorder.ts';
 import { Recordings } from './recordings.ts';
+import { decodeDoomEvaluationRecordingManifest, type DoomEvaluationRecordingManifest } from './doom-evaluation-recording-manifest.ts';
+export type { DoomEvaluationRecordingManifest } from './doom-evaluation-recording-manifest.ts';
 
 /** One evaluation run owns its footage independently of the live game's recordings. */
 export interface DoomRunRecording {
@@ -12,19 +14,10 @@ export interface DoomRunRecording {
   update(view: SessionView): void;
   close(view: SessionView): Promise<void>;
 }
-export interface DoomEvaluationRecordingManifest {
-  version: 1;
-  state: 'recording' | 'finished';
-  /** Selected ancestry observed in this test run, starting at its scenario state. */
-  path?: ReplayPath;
-  /** Final observed main-world tick, used to detect an incompletely recorded tail. */
-  endpointTick?: number;
-  error?: string;
-}
 
 /** Bounded buffering and ordinary replay segments; no sampling or synthetic frames. */
 export async function openDoomEvaluationRecording(directory: string): Promise<DoomRunRecording> {
-  const manifest = new JsonFileStore<DoomEvaluationRecordingManifest>(join(directory, 'recording.json'), value => value as DoomEvaluationRecordingManifest);
+  const manifest = new JsonFileStore<DoomEvaluationRecordingManifest>(join(directory, 'recording.json'), decodeDoomEvaluationRecordingManifest);
   if (await manifest.load()) throw new Error('Evaluation recording already exists; cannot overwrite a previous run');
   // Evaluation spectators retain selected routes. Discarded trial footage can
   // be reclaimed as soon as it is no longer protected by the running session.

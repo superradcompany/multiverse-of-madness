@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +15,8 @@ import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import { doomIncidentCheckpoint, type DoomEvaluationVmPorts } from './doom-evaluation-vms.ts';
 import type { GameState } from '../../contracts/src/game.ts';
 import { Recordings } from './recordings.ts';
-import type { DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
+import { openDoomEvaluationRecording, type DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
+import { LearningEvaluationReader } from './learning-evaluation-view.ts';
 
 async function recordingFor(root: string, proposal: string, runId: string) {
   const directory = join(root, proposal, 'runs', contentRevision('doom-evaluation-run', runId).version.slice(7));
@@ -95,6 +96,35 @@ test('production evaluator composition writes a complete paired experiment, exer
     await assert.rejects(reopened.qualify(f.request, new AbortController().signal), /already admitted/);
     assert.equal(f.calls, 4); assert.equal(f.creations, 2);
   } finally { await f.cleanup(); }
+});
+
+test('startup recovers only admitted recordings without dispatching gameplay or creating results', async () => {
+  const f = await fixture();
+  const session = new Session({ decide: async () => decision });
+  try {
+    const root = join(f.root, f.request.proposalId);
+    const id = contentRevision('doom-evaluation-run', 'composition-fixture/first/baseline').version.slice(7);
+    const directory = join(root, 'runs', id);
+    const writer = await openDoomEvaluationRecording(directory);
+    await writeFile(join(root, 'manifest.json'), JSON.stringify({ version: 1, contract: f.options.contract }));
+    await session.initialize(new Runtime('saved-root'));
+    const view = session.snapshot();
+    await writer.record(view.worlds[0]!, session.frame(view.mainId)); await writer.retainPath(view.mainId);
+    await writeFile(join(directory, 'session.json'), JSON.stringify(session.checkpoint()));
+    const foreign = join(root, 'runs', 'f'.repeat(64));
+    await openDoomEvaluationRecording(foreign);
+    const foreignBefore = await readFile(join(foreign, 'recording.json'), 'utf8');
+    await f.evaluator.recover();
+    const reader = new LearningEvaluationReader(f.root);
+    const recovered = await reader.view(f.request.proposalId, false);
+    assert.equal(recovered.runs[0]!.status, 'interrupted');
+    assert.equal(recovered.runs[0]!.replay!.frames, 1); assert.equal(recovered.runs[0]!.replay!.incomplete, true);
+    assert.equal((await reader.replayFrames(f.request.proposalId, id, 0, 1))[0]!.tick, view.worlds[0]!.state.tick);
+    await assert.rejects(readFile(join(directory, 'result.json')), { code: 'ENOENT' });
+    assert.equal(await readFile(join(foreign, 'recording.json'), 'utf8'), foreignBefore);
+    assert.equal(f.calls, 0); assert.equal(f.creations, 0);
+    await assert.rejects(f.evaluator.qualify(f.request, new AbortController().signal), /already admitted/);
+  } finally { await session.close(); await f.cleanup(); }
 });
 
 test('sized allowance lets both sides complete a fork and pins the concrete contract in a versioned manifest', async () => {

@@ -1,15 +1,7 @@
 import { join } from 'node:path';
-import { z } from 'zod';
 import type { EvaluationReplayFrame } from '../../contracts/src/learning-evaluation.ts';
 import { RecordingReader } from './recording-reader.ts';
-
-const position = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
-const pathSchema = z.object({
-  endpointId: z.string(), frames: position, firstTick: position, lastTick: position, missingHistory: z.boolean(),
-  segments: z.array(z.object({ worldId: z.string(), label: z.string(), firstFrame: position, ticks: z.array(position) })),
-});
-const manifestSchema = z.object({ version: z.literal(1), state: z.literal('finished'),
-  endpointTick: position.optional(), path: pathSchema, error: z.string().optional() });
+import { decodeDoomEvaluationRecordingManifest } from './doom-evaluation-recording-manifest.ts';
 
 /** Frozen selected path, read without opening a mutable recording store. */
 export class DoomEvaluationReplay {
@@ -18,7 +10,8 @@ export class DoomEvaluationReplay {
   private readonly reader: RecordingReader;
 
   constructor(directory: string, value: unknown) {
-    this.manifest = manifestSchema.parse(value);
+    this.manifest = decodeDoomEvaluationRecordingManifest(value);
+    if (this.manifest.state !== 'finished' || !this.manifest.path) throw new Error('Evaluation replay is unavailable');
     const path = this.manifest.path;
     this.points = path.segments.flatMap(segment => segment.ticks.map((tick, offset) => ({
       worldId: segment.worldId, frame: segment.firstFrame + offset, tick,
