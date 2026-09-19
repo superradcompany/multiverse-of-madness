@@ -1,6 +1,8 @@
 # Supervisor-driven improvement of the learning system
 
-Current implementation and remaining acceptance work: [completion checklist](COMPLETION-CHECKLIST.md). Dated milestones below are historical evidence.
+> Design and milestone context; this document mixes intended and implemented work.
+> Use the [current architecture](docs/ARCHITECTURE.md), [example guides](README.md#try-it)
+> and [completion checklist](COMPLETION-CHECKLIST.md) for supported behavior and remaining scope.
 
 Design status: partially implemented and qualified below. No Exo dependency has
 been installed or selected. The gameplay harness remains a standalone TypeScript

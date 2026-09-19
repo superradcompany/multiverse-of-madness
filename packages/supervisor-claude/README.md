@@ -1,7 +1,8 @@
 # Claude Code supervisor provider
 
 Implements the generic `SupervisorProvider` port through the installed Claude CLI
-and its existing server-side login. The learning lab selects unrestricted mode:
+and its existing server-side login. Doom background learning selects unrestricted
+mode:
 `--print --dangerously-skip-permissions --no-session-persistence --output-format json`.
 No host-imposed cost, time, turn or input/output-size caps apply in this mode.
 The caller can still cancel; the process watchdog joins cleanup on cancellation

@@ -1,8 +1,9 @@
 # Codex CLI supervisor provider
 
 Implements `SupervisorProvider` using the installed Codex CLI and its existing
-server-side authentication. The learning lab defaults to this provider and can
-select Claude for each new improvement request.
+server-side authentication. Doom background learning defaults to this provider
+and can select Claude for future requests. Chess automatic learning currently
+uses Codex.
 
 Invocation: `codex exec --dangerously-bypass-approvals-and-sandbox
 --skip-git-repo-check --ephemeral --color never --json --output-last-message PATH -`.

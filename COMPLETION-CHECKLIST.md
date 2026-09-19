@@ -247,7 +247,7 @@ The rollout preserved both live sessions and all existing learning journals.
 - [x] Demonstrate ordinary ongoing play, not only a hand-crafted tactical puzzle.
 - [ ] Finish application-level game/session selection and persist settings,
   learning history and replays independently per game/session.
-- [ ] Document adapter requirements and unsupported capabilities. A game without
+- [x] Document adapter requirements and unsupported capabilities. A game without
   exact snapshots must not be presented as having exact sandbox forks.
 
 Chess now uses those interfaces with real Jev, alternative boards, winner promotion,
@@ -399,7 +399,7 @@ stopped.
   adapters, orchestration in the harness, and executables isolated from the host.
 - [x] Finish the independently usable harness package in the single repository and
   verify a clean install/build/test plus documented game-adapter onboarding.
-- [ ] Consolidate stale milestone prose into current architecture, run instructions,
+- [x] Consolidate stale milestone prose into current architecture, run instructions,
   supported behavior and limitations. Keep exact qualification evidence linked.
 - [ ] Run the final application/core checks and the required real-runtime and
   cross-game acceptance scenarios. Report failures and unverified claims plainly.
@@ -419,6 +419,16 @@ passed; the chess launch command served its paused fixture and browser assets.
 The application and harness suites passed 378 and 120 tests respectively. The root
 README documents `demo:doom` and `demo:chess`; detailed guides live with each example.
 Evidence: `artifacts/harness-package/2026-09-18/`.
+
+Documentation consolidation (2026-09-19): the example READMEs and Doom learning
+guide now describe current behavior, with a shared architecture/session guide and
+verification matrix. Original milestone reports are preserved in `docs/history/`;
+local ignored artifact paths are explicitly identified as unbundled evidence.
+Current guidance distinguishes exact chess histories from VM forks, plain-to-learning
+adoption, automatic supervision, unlimited live accounting versus finite evaluation,
+and implemented behavior from unqualified gameplay claims. Design documents point
+to the current guides. This closes documentation delivery only; it does not qualify
+current runtime behavior, complete shared session management or prove game quality.
 
 Completion requires the unchecked items above, not a fixed number of passing
 unit tests. Release, publication and commits still require explicit authorization.

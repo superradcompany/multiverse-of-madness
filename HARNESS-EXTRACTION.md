@@ -1,6 +1,8 @@
 # Generic gameplay harness extraction
 
-Current implementation and remaining acceptance work: [completion checklist](COMPLETION-CHECKLIST.md). Dated milestones below are historical evidence.
+> Design and milestone context; this document mixes intended and implemented work.
+> Use the [current architecture](docs/ARCHITECTURE.md), [example guides](README.md#try-it)
+> and [completion checklist](COMPLETION-CHECKLIST.md) for supported behavior and remaining scope.
 
 Status: in progress. Baseline: `fd777f7` in the demo repository.
 

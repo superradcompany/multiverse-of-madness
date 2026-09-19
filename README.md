@@ -47,3 +47,5 @@ code runs in isolated VMs. The examples demonstrate the workflow, not proven
 competitive playing strength.
 
 For a new game, start with the [adapter guide](harness/ADAPTERS.md).
+See [architecture](docs/ARCHITECTURE.md), [saved sessions](docs/SESSIONS.md) and
+[verification](VERIFICATION.md) for current behavior and limitations.
