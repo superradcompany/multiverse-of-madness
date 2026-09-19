@@ -21,6 +21,7 @@ import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
 import { navigateDoomInputs } from './doom-navigation.ts';
 import { DoomMap } from './doom-geometry.ts';
+import { DoomEngine } from '../../bridge/src/engine.ts';
 
 const options = { threshold: .75, horizon: 7, branches: 2, paceMs: 0 };
 const fallback = { decide: async () => structuredClone(decision) };
@@ -308,6 +309,44 @@ test('a supervisor motor revision reaches forked controls and survives reconnect
     await f.controller.rollback(f.baseline.revision, 'Return to the prior motor preferences');
     assert.equal(f.session.learningPolicy().motor, undefined);
     assert.deepEqual(f.session.checkpoint().policies!.find(record => record.revision.version === reference.version)!.policy.values.motor, motor);
+  } finally { await f.cleanup(); }
+});
+
+test('conditional combat uses the recorded supervisor aim tolerance before and after each session tick', async () => {
+  const engine = await DoomEngine.load('assets/wasmdoom.wasm', 'assets/freedoom1.wad');
+  for (let tick = 0; tick < 86; tick++) engine.step({ ticks: 1, inputs: ['forward'] });
+  // Stationary wiring fixture at a real unblocked encounter. The angle is
+  // deliberately in the learned-policy gap; no engine state is written.
+  const state = engine.state(), enemy = state.enemies[0]!;
+  state.angle = Math.atan2(enemy.position.y - state.y, enemy.position.x - state.x) * 180 / Math.PI - 4;
+  state.enemies = [{ ...enemy, relativeBearing: 4 }];
+  const commands: Step[] = [];
+  class Stationary extends Runtime {
+    override async step(command: Step) { commands.push(structuredClone(command)); return super.step(command); }
+    override async branch(ids: string[]) { return ids.map(id => new Stationary(id, structuredClone(state))); }
+  }
+  const f = await fixture(false, new Stationary('root', state));
+  try {
+    const motor = { ...defaultDoomMotorPolicy, aimToleranceDegrees: 3 };
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, motor } };
+    await f.propose('aim', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('aim');
+    f.session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, new DoomMap([]), navigation, policy));
+    const target = { ...enemy.position, kind: 'enemy' as const, engineType: enemy.engineType };
+    const plan = { id: 'engage', label: 'engage', probability: 1, steps: [
+      { kind: 'face' as const, label: 'face', target, maxTicks: 105 },
+      { kind: 'attack' as const, label: 'attack', target, maxTicks: 140 },
+    ] };
+    f.hooks.decision = { ...decision, confidence: 1, plans: { selected: plan.id, candidates: [plan] } };
+    await f.step();
+    assert.equal(commands.length, 7);
+    assert.ok(commands.every(command => command.inputs.length === 1 && command.inputs[0] === 'left'));
+    const saved = f.session.checkpoint(), world = saved.worlds.find(world => world.view.id === saved.experiments[0]!.id)!;
+    assert.equal(world.plan!.step, 0, 'refresh must not advance facing with a different tolerance');
+    assert.deepEqual(saved.policies!.find(record => record.revision.version === world.view.policyRevision!.version)!.policy.values.motor, motor);
+    await f.promote(); await f.save(); await f.reopen();
+    assert.equal(f.session.learningPolicy().motor!.aimToleranceDegrees, 3);
   } finally { await f.cleanup(); }
 });
 

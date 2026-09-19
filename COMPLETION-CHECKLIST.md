@@ -851,3 +851,38 @@ Validation: the application suite passed 475 tests before the final context and
 resource refinements; the final affected engine, planner, resource and learning
 model checks passed 21 tests, including two added compatibility cases. Type
 checking and the bridge/Doom/chess build passed. No live VM/model check was run.
+
+
+### Combat alignment mismatch (2026-09-19)
+
+Conditional combat previously stopped turning at 7 degrees (6 for strafing),
+while the motor independently required its recorded aim tolerance before firing.
+The gap produced stationary ticks with rejected shots. Combat-facing, attack and
+strafe-attack steps now consume the same pinned motor policy as the controller,
+including session refresh and trial completion checks. Point navigation/use
+alignment is unchanged; policy serialization and historical hashes are unchanged.
+
+A deterministic local-WASM comparison used 12 starting headings in one opening
+encounter for each tolerance, with actual keys and no player-state writes:
+
+| Aim tolerance | Kills before / after | Rejected-fire idle ticks before / after | Total game ticks before / after |
+| --- | --- | --- | --- |
+| 6 degrees (default) | 12 / 12 | 169 / 0 | 810 / 730 |
+| 3 degrees | 4 / 12 | 1177 / 0 | 1382 / 362 |
+
+Each case was capped at 210 ticks. Aggregate health change stayed +1 in each
+12-case group (including engine pickups). This establishes the controller defect
+and its correction in this encounter; it does not justify a universal 3-degree
+setting or prove better autonomous play. Evidence is in
+`artifacts/aim-alignment/2026-09-19/{before,after}.json`; the before engine/controller
+revision was `835b416`. Reproduce the current measurement with
+`node --import tsx scripts/qualification/doom-aim.ts`.
+
+Regression tests cover both turning directions across the policy bounds, actual
+local-WASM kills, and session delivery of the supervisor's recorded 3-degree
+setting through tick refresh, policy persistence and reconnect. No saved demo,
+VM or real model call was started. Live stuck-room recovery, model selection and
+sustained performance remain open.
+
+Final validation: 481 application tests, type checking and the bridge/Doom/chess
+build passed. Live VM/model checks were not run under the stop constraint.

@@ -208,3 +208,20 @@ No saved run is automatically restarted. Fist selection while owning a chainsaw
 is omitted because berserk state is not yet observed. Local WASM tests cover
 pistol/fist switching and one elevated-enemy recovery; advanced weapons and live
 VM/model selection still need qualification.
+
+
+### Checking combat alignment offline
+
+`node --import tsx scripts/qualification/doom-aim.ts` runs the local WASM engine
+through the same opening encounter from 12 headings at two aiming tolerances.
+It reports kills, health change, elapsed game ticks and rejected-fire idle ticks.
+It starts no VM or model and does not touch saved sessions. This is a controller
+regression check, not a measure of Jev decision quality or general playing strength.
+
+Conditional combat plans and motor firing now use the same recorded
+`motor.aimToleranceDegrees`. Previously plans could stop turning before the motor
+would allow a shot, especially after a supervisor narrowed the tolerance. Point
+navigation and interaction alignment keep their existing rules. Historical policy
+records retain their original values and hashes; the behavioral correction belongs
+to this gameplay build and requires the usual explicit build handoff for saved
+supervised runs.

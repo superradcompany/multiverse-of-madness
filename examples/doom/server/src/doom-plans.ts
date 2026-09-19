@@ -8,6 +8,7 @@ import type { GameState, Input, Weapon } from '../../contracts/src/game.ts';
 import type { PlanView } from '../../contracts/src/session.ts';
 import type { DoomMap } from './doom-geometry.ts';
 import { plausibleRangedTarget } from './doom-targeting.ts';
+import { defaultDoomMotorPolicy, type DoomMotorPolicy } from './doom-motor-policy.ts';
 import { defaultDoomExecutionPolicy, type DoomExecutionPolicy } from './doom-execution-policy.ts';
 
 interface Point { x: number; y: number; z: number }
@@ -131,7 +132,7 @@ export function stopPlan(run: PlanExecution, status: PlanExecution['status'], re
 
 // Returns one tick of intent. The motor controller still handles collisions and
 // shooting safety. No state prediction or engine state mutation is involved.
-export function planInputs(run: PlanExecution, state: GameState, history: GameState[], map?: DoomMap, execution: Readonly<DoomExecutionPolicy> = defaultDoomExecutionPolicy): Input[] {
+export function planInputs(run: PlanExecution, state: GameState, history: GameState[], map?: DoomMap, execution: Readonly<DoomExecutionPolicy> = defaultDoomExecutionPolicy, motor: Readonly<DoomMotorPolicy> = defaultDoomMotorPolicy): Input[] {
   if (run.status !== 'running') return [];
   if (state.tick >= run.untilTick) return stopPlan(run, 'horizon', 'comparison duration reached');
   if (!state.alive) return stopPlan(run, 'replan', 'player died');
@@ -165,7 +166,10 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
     if (target.kind !== 'point' && map?.sight(state, target) === 'solid-wall-blocked') return stopPlan(run, 'replan', 'target became obstructed');
     if ((step.kind === 'attack' || step.kind === 'strafeAttack') && !canAttack(state)) return stopPlan(run, 'replan', 'weapon needs ammunition');
     const bearing = bearingTo(state, target);
-    const complete = step.kind === 'face' ? Math.abs(bearing) <= 7 : step.kind === 'move' && target.kind !== 'pickup' && distance(state, target) <= (step.within ?? 24);
+    // Combat alignment and the motor's fire gate must use the same decision
+    // policy; otherwise the plan stops turning where the motor refuses to fire.
+    const alignment = target.kind === 'enemy' ? motor.aimToleranceDegrees : 7;
+    const complete = step.kind === 'face' ? Math.abs(bearing) <= alignment : step.kind === 'move' && target.kind !== 'pickup' && distance(state, target) <= (step.within ?? 24);
     if (complete) {
       run.step++;
       const next = run.plan.steps[run.step]?.target;
@@ -186,13 +190,13 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
     if (step.kind === 'strafeAttack') {
       const direction = step.direction ?? 'strafeLeft';
       if (!map || map.clearance(state, state.angle + (direction === 'strafeLeft' ? 90 : -90)) < 24) return stopPlan(run, 'replan', 'strafe route blocked');
-      return [direction, ...(Math.abs(bearing) > 6 ? [bearing > 0 ? 'left' as const : 'right' as const] : ['fire' as const])];
+      return [direction, ...(Math.abs(bearing) > motor.aimToleranceDegrees ? [bearing > 0 ? 'left' as const : 'right' as const] : ['fire' as const])];
     }
     if (step.kind === 'move') {
       const recent = history.filter(s => s.tick >= state.tick - 9 && s.tick >= run.stepStarted.tick && s.map === state.map && s.episode === state.episode);
       if (state.tick - run.stepStarted.tick >= execution.blockedAfterTicks && recent.length >= 8 && recent.every(s => distance(s, state) < 2 && Math.abs(s.angle - state.angle) < 4)) return stopPlan(run, 'replan', 'route blocked');
     }
-    if (Math.abs(bearing) > (step.kind === 'move' ? 25 : 7)) return [bearing > 0 ? 'left' : 'right'];
+    if (Math.abs(bearing) > (step.kind === 'move' ? 25 : alignment)) return [bearing > 0 ? 'left' : 'right'];
     return step.kind === 'attack' ? ['fire'] : ['forward', 'use'];
   }
   return stopPlan(run, 'complete', 'plan complete');
