@@ -1,4 +1,5 @@
 import '../../../../scripts/runtime-env.ts';
+import { collectDoomArchivedIncidents } from './doom-archived-incidents.ts';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { setPriority } from 'node:os';
@@ -57,6 +58,7 @@ process.on('message', (command: EvaluationProcessCommand | { id: number; kind: '
   work = (async () => {
     try {
       if (command.kind === 'recover') { await recover(); reply({ id: command.id } satisfies EvaluationProcessReply); }
+      else if (command.kind === 'collect-archives') { await collectDoomArchivedIncidents(command.dataDirectory, microsandboxEvaluationVmPorts); reply({ id: command.id } satisfies EvaluationProcessReply); }
       else {
         context = command.context;
         const result = await evaluator.qualify(command.request, control.signal, command.incident, command.continuation, command.training, command.trainingCatalog);

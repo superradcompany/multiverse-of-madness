@@ -73,6 +73,15 @@ contract still runs unchanged. The generic core validates catalog/selection
 identities while each application owns case creation and execution. Live
 curriculum effectiveness remains unqualified.
 
+Doom keeps four recent distinct living practice checkpoints per current learning
+lineage, plus pending proposal selections. After a build upgrade, background
+maintenance can retire archived incident snapshots once pending work and resource
+cleanup finish. The current session, explicit build-upgrade rollback backups and
+recovery points protect their references. Cleanup checks physical snapshot identity
+and deletes only leaves; descendants defer removal. Policy history, captured
+evidence and replay files remain available. Keeping a rollback backup also keeps
+its practice snapshots; removing that backup permits later collection.
+
 This is not permission to rewrite every host value. Game mechanics, physical
 runtime identities, canonical history and qualification rules remain host-owned.
 Some Doom thresholds and execution algorithms are still fixed.

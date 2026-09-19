@@ -201,8 +201,19 @@ service, run practice from the borrowed snapshot, and collect it only after the
 last proposal releases it. The current game stays unchanged. Formats 1 and 2 remain
 readable; older hosts refuse format 3. UI labels identify the observed position.
 The full application suite passed 456 tests; live usefulness and real snapshot
-qualification remain pending. Automatic retirement of archived-lineage practice
-snapshots still needs implementation, so broader GC/curriculum items remain open.
+qualification remain pending.
+
+Archived Doom practice cleanup (2026-09-19): startup and periodic maintenance now
+retire incident snapshots from published historical lineages that no session or
+explicit rollback backup still roots. Pending proposals, jobs and unfinished
+executor/evaluation/practice resource journals defer retirement. Physical identity
+checks and leaf-only deletion preserve descendants; interrupted deletion retries
+from the durable incident journal. Immutable history and captured evidence remain
+unchanged. Maintenance runs in the background evaluator process and joins before
+new comparisons, without making a cleanup failure fail gameplay. Offline tests
+cover retention, expiry, resource deferrals, altered identities, symlinks and lost
+acknowledgement. Real snapshot qualification and broader GC/curriculum items
+remain open; explicit rollback backups retain their snapshots until removed.
 
 Doom execution-policy progress: supervisor proposals can now supply four bounded
 plan settings: damage before replanning, distance for new-threat interruption,

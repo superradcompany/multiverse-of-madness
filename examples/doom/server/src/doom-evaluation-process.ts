@@ -10,7 +10,7 @@ import type { DoomPolicy } from './doom-policy.ts';
 import type { DoomEvaluationContext } from './doom-revision-evaluation.ts';
 import type { DoomLearningManifest } from './doom-learning-manifest.ts';
 
-export type EvaluationProcessCommand = { id: number; kind: 'recover' } | {
+export type EvaluationProcessCommand = { id: number; kind: 'recover' } | { id: number; kind: 'collect-archives'; dataDirectory: string } | {
   id: number; kind: 'qualify'; request: QualificationRequest<DoomPolicy>;
   context: { revision: VersionRef; value: DoomEvaluationContext };
   incident?: DoomIncidentCheckpoint; continuation?: SessionContinuation; training?: TrainingSelection; trainingCatalog?: TrainingCatalog<DoomVmScenario>;
@@ -23,24 +23,37 @@ export class DoomEvaluationProcess {
   private child?: ChildProcess;
   private ready?: Promise<void>;
   private sequence = 0;
+  private maintenance?: Promise<void>;
   private readonly pending = new Map<number, { resolve(value: Qualification | undefined): void; reject(error: Error): void }>();
   constructor(private readonly directory: string, manifest: DoomLearningManifest,
     private readonly context: () => { revision: VersionRef; value: DoomEvaluationContext }) {
     this.version = contentRevision('doom-evaluation-contract', manifest.contract);
   }
-  async recover(): Promise<void> { await this.send({ id: ++this.sequence, kind: 'recover' }); }
+  // Maintenance reports its own failure; joining it must not fail a new game comparison.
+  async recover(): Promise<void> { if (this.maintenance) await this.maintenance.catch(() => {}); await this.send({ id: ++this.sequence, kind: 'recover' }); }
+  /** Low-priority maintenance: never overlap a comparison; new comparisons join it before dispatch. */
+  async collectArchives(dataDirectory: string): Promise<void> {
+    if (this.maintenance) return this.maintenance;
+    if (this.pending.size) return;
+    const work = this.send({ id: ++this.sequence, kind: 'collect-archives', dataDirectory }).then(() => {});
+    this.maintenance = work;
+    try { await work; } finally { if (this.maintenance === work) this.maintenance = undefined; }
+  }
   async qualify(request: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation, training?: TrainingSelection, trainingCatalog?: TrainingCatalog<DoomVmScenario>): Promise<Qualification> {
     signal.throwIfAborted();
     const id = ++this.sequence;
     const cancel = () => { void this.ready?.then(() => { if (this.child?.connected) this.child.send({ kind: 'cancel', id }); }).catch(() => {}); };
     const command: EvaluationProcessCommand = structuredClone({ id, kind: 'qualify', request, context: this.context(),
       ...(training ? { training, trainingCatalog } : {}), ...(incident ? { incident, continuation } : {}) });
+    if (this.maintenance) await this.maintenance.catch(() => {});
+    signal.throwIfAborted();
     const result = this.send(command);
     signal.addEventListener('abort', cancel, { once: true });
     try { return (await result)!; }
     finally { signal.removeEventListener('abort', cancel); }
   }
   async close(): Promise<void> {
+    await this.maintenance?.catch(() => {});
     const child = this.child;
     if (!child) return;
     if (this.pending.size) throw new Error('Join background evaluations before closing their worker');

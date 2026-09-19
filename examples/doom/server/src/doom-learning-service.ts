@@ -1,3 +1,4 @@
+import { collectDoomArchivedIncidents } from './doom-archived-incidents.ts';
 import { doomTrainingCatalog } from './doom-curriculum.ts';
 import { trainingMenu, selectedTrainingScenarios, validateTrainingSelection } from '@multiverse/gameplay-harness';
 import { DoomLearningIncidents, decodeDoomIncidents } from './doom-learning-incidents.ts';
@@ -68,6 +69,7 @@ export class DoomLearningService {
   private readonly executionRecords = new Map<string, ExecutorRunRecord>();
   private readonly stores = new Map<string, JsonFileStore<any>>();
   private closing?: Promise<void>;
+  private maintenance?: Promise<void>;
   private enabled = false;
   private automation?: AutonomousLearning<DoomLearningMark>;
   private automationTimer?: ReturnType<typeof setInterval>;
@@ -88,6 +90,16 @@ export class DoomLearningService {
     return owner;
   }
   get binding() { return this.supervisor?.binding; }
+
+  /** Called under the host data lease. Production work stays on the evaluator event loop. */
+  async collectArchived(dataDirectory: string): Promise<void> {
+    if (this.closing || !this.evaluator || this.jobs?.busy) return;
+    if (this.maintenance) return this.maintenance;
+    const work = this.evaluator instanceof DoomEvaluationProcess ? this.evaluator.collectArchives(dataDirectory)
+      : collectDoomArchivedIncidents(dataDirectory, manifest => this.options.runtime ?? microsandboxEvaluationVmPorts(manifest)).then(() => {});
+    this.maintenance = work;
+    try { await work; } finally { if (this.maintenance === work) this.maintenance = undefined; }
+  }
 
   /** Restore learning, or initialize it automatically at a safe gameplay boundary. */
   async attach(session: Session): Promise<void> {
@@ -248,6 +260,7 @@ export class DoomLearningService {
     try { await this.automation?.close(); } finally {
       try { await this.jobs?.close(); } finally {
         try {
+          await this.maintenance?.catch(() => {});
           await this.evaluator?.recover();
           if (this.evaluator instanceof DoomEvaluationProcess) await this.evaluator.close();
           for (const record of this.executionRecords.values()) if (record.phase !== 'released') await this.executor!.recover(record);
@@ -300,6 +313,7 @@ export class DoomLearningService {
     this.supervisor = await DoomSupervisor.open({ historical, models: this.models, store: this.store('supervisor.json', decodeDoomSupervisor), expectedBinding,
       initial: manifest.initial, rules: { contract: this.evaluator.version, capabilities: ['policy', 'prompts', 'skills', 'executor', 'model'], maxLifetimeMs: 24 * 3600000 },
       qualify: async (request, signal) => {
+        await this.maintenance?.catch(() => {}); signal.throwIfAborted();
         const retained = this.incidents!.snapshot().records.some(record => record.proposalId === request.proposalId);
         const incident = retained ? this.incidents!.ready(request.proposalId) : undefined;
         const record = await this.proposalStore(request.proposalId).load();
@@ -337,7 +351,7 @@ export class DoomLearningService {
   private async openJobs() {
     if (this.jobs) return;
     this.jobs = await DoomLearningJobs.open({ supervisor: this.supervisor!, store: this.store('jobs.json', decodeDoomLearningJobs),
-      proposalStore: id => this.proposalStore(id), recover: () => this.evaluator!.recover(), settled: () => this.collectIncidents(),
+      proposalStore: id => this.proposalStore(id), recover: async () => { await this.maintenance?.catch(() => {}); await this.evaluator!.recover(); }, settled: () => this.collectIncidents(),
       proposalOptions: async (id, store, signal, selectedProvider = 'codex') => {
         signal.throwIfAborted();
         const incident = await this.incidents!.capture(id, signal);

@@ -36,9 +36,17 @@ test('evaluation worker exchanges requests, rejects stale context without creati
     const request = { proposalId: randomUUID(), baseline: initial, candidate: initial, contract: worker.version, context: { ...version, version: 'stale' } };
     await assert.rejects(worker.qualify(request, new AbortController().signal), /context changed/);
     const mutable = structuredClone(request);
+    await writeFile(join(directory, 'session.json'), JSON.stringify({ version: 1, view: { mainId: 'fixture' }, worlds: [] }));
+    const cleanup = worker.collectArchives(directory);
     const frozen = worker.qualify(mutable, new AbortController().signal);
     mutable.context = version;
-    await assert.rejects(frozen, /context changed/, 'queued worker requests retain the originally supplied context');
+    await assert.rejects(frozen, /context changed/, 'queued worker requests retain the originally supplied context during maintenance');
+    await cleanup;
+    await writeFile(join(directory, 'session.json'), 'invalid');
+    const failedCleanup = assert.rejects(worker.collectArchives(directory));
+    await assert.rejects(worker.qualify(request, new AbortController().signal), /context changed/,
+      'an archive cleanup failure does not fail the next comparison');
+    await failedCleanup;
     await assert.rejects(worker.qualify(request, AbortSignal.abort(new Error('cancelled'))), /cancelled/);
     const current = { ...request, context: version };
     await assert.rejects(worker.qualify(current, new AbortController().signal, undefined, undefined,

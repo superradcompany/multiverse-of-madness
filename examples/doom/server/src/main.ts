@@ -85,12 +85,14 @@ await recordings.retainPath(session.snapshot().mainId);
 await recordings.collect();
 const collectionTimer = setInterval(() => {
   void recordings.collect();
+  void learning.collectArchived(dataLease.directory).catch(error => console.error('Archived checkpoint cleanup deferred:', error.message));
   void session.collectGarbage(destroyWorld).catch(error => console.error('Sandbox cleanup retry failed:', error.message));
 }, 30000);
 const recordingTimer = setInterval(() => { void recordings.flush(); }, 1000);
 session.setPersistence(checkpoint => store.save(checkpoint));
 await store.save(session.checkpoint());
 await learning.attach(session);
+await learning.collectArchived(dataLease.directory).catch(error => console.error('Archived checkpoint cleanup deferred:', error.message));
 const learningCommand = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('enable') }),
   z.strictObject({ type: z.literal('automation'), enabled: z.boolean(), provider: z.enum(['codex', 'claude']) }),
