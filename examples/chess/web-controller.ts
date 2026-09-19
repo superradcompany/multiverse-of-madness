@@ -15,7 +15,7 @@ export class ChessWebController {
     return { running: this.running, busy: Boolean(this.task), error: this.error,
       learning: this.learning?.view(), mainId: saved.mainId, objective: saved.objective, policy: saved.policy, model: saved.provenance.model.id,
       comparison: saved.batch ? { complete: saved.batch.complete, plies: saved.batch.plies } : undefined,
-      worlds: saved.worlds.filter(world => ids.has(world.meta.id)).map(world => ({ id: world.meta.id, label: world.label, state: world.state, statistics: world.statistics })),
+      worlds: saved.worlds.filter(world => ids.has(world.meta.id)).map(world => ({ id: world.meta.id, label: world.label, state: world.state, ...(world.temporaryGoal ? { temporaryGoal: world.temporaryGoal } : {}), statistics: world.statistics })),
       checkpoints: saved.points.points.map(point => ({ id: point.id, ply: point.data.state.ply })),
       attempts: { plies: saved.attempts.plies - offset.plies, decisions: saved.attempts.decisions - offset.decisions,
         forks: saved.attempts.forks - offset.forks, rollbacks: saved.attempts.rollbacks - offset.rollbacks },

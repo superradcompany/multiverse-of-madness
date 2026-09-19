@@ -29,7 +29,7 @@ export class ChessPreparedModel implements ChessDecisionModel {
       ledger: this.options.ledger, limits: this.limits, record: this.options.record,
       validate: (output, captured) => prepareChessRequest(output, {
         state: captured.state, objective: captured.objective, candidates: captured.candidates,
-        experience: captured.experience, revision: captured.revision,
+        experience: captured.experience, revision: captured.revision, ...(captured.temporaryGoal ? { temporaryGoal: captured.temporaryGoal } : {}),
       }),
     }, signal);
   }

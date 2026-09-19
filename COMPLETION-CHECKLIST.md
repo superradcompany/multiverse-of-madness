@@ -4,6 +4,10 @@ Current assessment: 2026-09-18. This is the current completion tracker; dated
 qualification notes in the other design documents describe historical milestones,
 not current completion. Unchecked means unfinished or insufficiently verified.
 
+Operating status: the demo servers and all local Microsandbox VMs were stopped
+at the user's request. Deployment notes below describe earlier verification;
+they do not mean those services are currently running.
+
 The target is a reusable TypeScript game-learning engine: game-specific adapters
 expose observations and legal controls; an occasional supervisor creates and
 improves reusable strategies/code; Jev handles frequent decisions; Microsandbox
@@ -99,7 +103,7 @@ the harness's clean external-package consumer. Evidence:
 - [ ] Automatically add, replace and remove strategies based on evidence of
   missing options, repeated failures and obsolete conditions. Generated candidates
   must stay grounded in observations and pass host validation.
-- [ ] Make temporary subgoals explicit, persistent, scoped and expiring, without
+- [x] Make temporary subgoals explicit, persistent, scoped and expiring, without
   overwriting the user's objective. Report missing observations/controls as gaps.
 
 Temporary-goal foundation (2026-09-18): the portable harness now validates and
@@ -115,8 +119,22 @@ Prefetch rejects results whose goals ended before consumption. Scripted real-VM
 qualification branched two children, reconnected all worlds with unchanged goal
 identity/deadlines, preserved the source and removed all three owned VMs. Run it
 with `node --import tsx scripts/qualification/doom-goals.ts` after setup.
-Chess integration and autonomous goal-quality qualification remain unfinished;
-this does not establish automatic recovery from a stuck game.
+Chess now uses the same core lifecycle with board-derived completion, ply-based
+deadlines, session format 3, selected replays, checkpoints and fresh-game scoping.
+Only the controlled side receives goal guidance; expired goals enter the existing
+background review cadence with bounded evidence. Both complete-harness and
+single-path evaluations carry goals without changing independent outcome metrics.
+Real isolated preparation plus Jev passed three decisions, whole-future promotion,
+reconnect, selected replay and executor cleanup in
+`artifacts/chess-goals/2026-09-18T22-07-22.945Z`. Run the authored lifecycle fixture
+with `node --env-file=.env --import tsx scripts/qualification/chess-goals.ts`.
+Autonomous goal-quality qualification remains unfinished; these mechanics do not
+establish automatic recovery from a stuck game or stronger play.
+Final offline validation: 394 application, 126 harness and four web tests passed,
+plus type checking. A lost restore-acknowledgment test verifies that recovery
+invalidates checkpoint goals when the user's objective has changed, keeps the
+original deadline and persists the result across another restart. No VM or demo
+server was restarted for these final checks.
 
 Doom still has hand-written seed strategies. Generated planner `19db5d37-f130-4285-85dc-a6fe7c68f8a3`
 qualified on three opening cases (mean gain 45.67) and activated automatically.

@@ -104,3 +104,28 @@ test('one lucky repetition cannot qualify, while consistent gains can and role o
   await assert.rejects(compareChessStrategies({ baseline, candidate, contract: malformed, model: async () => { called = true; return fixture(ids => ids[0]!); } }, signal()), /differ in history/);
   assert.equal(called, false);
 });
+
+
+test('paired strategy evaluation carries scoped goals across moves without changing the frozen opponent', async () => {
+  const { prepareChessRequest } = await import('./preparation.ts');
+  const captures: Array<{ run: string; ply: number; id?: string; status?: string }> = [];
+  const result = await compareChessStrategies({ baseline, candidate, contract: contract(4), model: async (_revision, _ledger, run) => ({
+    version: { id: 'goal-evaluation-fixture', version: '1' },
+    prepare: async request => {
+      const prepared = prepareChessRequest({ abi: 'chess-preparation/2', guidance: '', experienceIndices: [],
+        plans: request.candidates.map(plan => ({ id: plan.id, label: plan.label, expectedBenefit: plan.expectedBenefit })),
+        temporaryGoal: { key: 'mate', instruction: 'Seek checkmate', reason: 'Exercise bounded pursuit', evidence: ['current-state'], duration: 3, target: { kind: 'checkmate' } },
+      }, request);
+      captures.push({ run, ply: request.state.ply, id: prepared.temporaryGoal?.current?.record.id, status: prepared.temporaryGoal?.current?.record.status });
+      return prepared;
+    },
+    decide: fixture(ids => ids[0]!).decide,
+  }) }, signal());
+  assert.ok(result.runs.every(run => run.status === 'complete'));
+  for (const side of ['baseline', 'candidate']) {
+    const calls = captures.filter(capture => capture.run.startsWith(`position/${side}/`));
+    assert.deepEqual(calls.map(call => call.ply), [0, 1, 2, 3]);
+    assert.equal(new Set(calls.map(call => call.id)).size, 1);
+    assert.deepEqual(calls.map(call => call.status), ['active', 'active', 'active', 'expired']);
+  }
+});

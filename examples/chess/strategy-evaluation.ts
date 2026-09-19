@@ -3,6 +3,7 @@ import { ChessAdapter, type ChessExperience } from './adapter.ts';
 import { ChessWorld, type ChessSave, type ChessState } from './runtime.ts';
 import type { ChessPolicy } from './session-types.ts';
 import type { ChessDecisionModel } from './revisions.ts';
+import { chessGoalFrame, advanceChessTemporaryGoal, type ChessTemporaryGoal } from './temporary-goal.ts';
 import { decideChess } from './decision.ts';
 import { chessSampleGroups, summarizeChessComparison, type ChessSampleGroup } from './comparison-summary.ts';
 
@@ -52,6 +53,7 @@ export async function compareChessStrategies(options: {
       try {
         const before = await world.state(), moves: ChessStrategyEvaluationEvidence['moves'] = [], experience: ChessExperience[] = [];
         let after = before;
+        let temporaryGoal: ChessTemporaryGoal | undefined;
         // Separate model objects/journals per run and role; the opponent always uses the baseline artifact.
         const strategy = await options.model(structuredClone(artifact), ledger, `${runId}/strategy`);
         const opponent = await options.model(structuredClone(baseline), ledger, `${runId}/opponent`);
@@ -60,13 +62,16 @@ export async function compareChessStrategies(options: {
           const state = after, ownTurn = state.turn === input.player;
           const result = await ledger.run({ owner: runId, operation: 'evaluation-decision', reserve: { modelCalls: 1 } }, async () => ({
             value: await decideChess(ownTurn ? strategy : opponent, { state, objective: input.objective,
+              temporaryGoal: { player: input.player, frame: chessGoalFrame({ scopeId: runId, state, player: input.player, objective: input.objective, source: artifact.revision }), ...(temporaryGoal ? { current: temporaryGoal } : {}) },
               candidates: await adapter.candidates(state), experience: structuredClone(experience.filter(item => item.fen === state.fen).slice(-4)), revision: (ownTurn ? artifact : baseline).revision }, current),
             usage: { modelCalls: 1 },
           }), current);
+          temporaryGoal = result.temporaryGoal;
           const plan = result.plans.find(item => item.id === result.answer.selected)!;
           after = await ledger.run({ owner: runId, operation: 'evaluation-move', reserve: { simulation: 1 } }, async () => ({
             value: await world.step(plan.payload), usage: { simulation: 1 },
           }), current);
+          if (temporaryGoal) temporaryGoal = advanceChessTemporaryGoal(temporaryGoal, chessGoalFrame({ scopeId: runId, state: after, player: input.player, objective: input.objective, source: artifact.revision }), after, input.player);
           moves.push({ before: state, after, selected: plan.id, actor: ownTurn ? 'strategy' : 'opponent' });
           const observed = adapter.evidence().capture(runId, plan.id, state, after);
           if (observed) experience.push(observed);

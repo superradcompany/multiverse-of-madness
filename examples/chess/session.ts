@@ -1,3 +1,4 @@
+import { chessGoalFrame, advanceChessTemporaryGoal, decodeChessTemporaryGoal } from './temporary-goal.ts';
 import { decideChess } from './decision.ts';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_POSITION } from 'chess.js';
@@ -22,6 +23,7 @@ type PinnedLearning = { policy: ChessPolicy; provenance: ChessProvenance; model:
 
 /** Adapter composition example: workflow ordering and durable lifecycle come from the public harness. */
 export class ChessSession {
+  private goalScopeId: string = randomUUID();
   private readonly gate = new ExecutionGate();
   private readonly worlds: WorldLifecycle<SessionChessWorld, StoredChessWorld>;
   private readonly forks: WorldForks<ChessFork, SessionChessWorld, StoredChessWorld>;
@@ -122,7 +124,7 @@ export class ChessSession {
 
   static async restore(directory: string, provider: ChessRuntimeStore, adapter: ChessAdapter, model: Model, learning?: ChessLearningBinding): Promise<ChessSession> {
     const saved = await new JsonFileStore(join(directory, 'session.json'), value => value as ChessSessionCheckpoint).load();
-    if (!saved || ![1, 2].includes(saved.version)) throw new Error('Missing or unsupported chess session');
+    if (!saved || ![1, 2, 3].includes(saved.version)) throw new Error('Missing or unsupported chess session');
     if ((saved.version === 1 && (saved.games || saved.pendingNewGame)) || (saved.version === 2 && !saved.games && !saved.pendingNewGame)) throw new Error('Invalid chess game history version');
     const session = new ChessSession(directory, provider, adapter, model, parseChessPolicy(saved.policy), learning);
     if (!same(saved.learning ?? null, learning?.identity ?? null)) throw new Error('Saved chess session requires its original learning supervisor');
@@ -130,6 +132,13 @@ export class ChessSession {
     if (saved.pendingFork) session.verifyProvenance(saved.pendingFork.baseline.provenance);
     if (saved.batch?.provenance) session.verifyProvenance(saved.batch.provenance);
     if (!same(session.provenance, saved.provenance)) throw new Error('Session components changed; explicit revision activation is required');
+    const savedGoals = [...saved.worlds, ...saved.points.points.map(point => point.data), ...(saved.pendingFork ? [saved.pendingFork.baseline] : []),
+      ...(saved.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))].flatMap(world => world.temporaryGoal ? [world.temporaryGoal] : []);
+    if (saved.version === 3) {
+      if (typeof saved.goalScopeId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(saved.goalScopeId)) throw new Error('Invalid saved chess goal scope');
+      for (const goal of savedGoals) if (decodeChessTemporaryGoal(goal).record.created.scope.id !== saved.goalScopeId) throw new Error('Saved chess goal belongs to another session');
+      session.goalScopeId = saved.goalScopeId;
+    } else if (saved.goalScopeId || savedGoals.length) throw new Error('Chess goals require session format 3');
     await session.recordings.open();
     session.objective = saved.objective; session.points = saved.points; session.batch = saved.batch; session.pendingFork = saved.pendingFork;
     session.pendingInputs = saved.pendingInputs; session.attempts = saved.attempts; session.memory.records = saved.experiences;
@@ -141,6 +150,7 @@ export class ChessSession {
       session.worlds.register({ ...fields, runtime });
     }
     session.worlds.mainId = saved.mainId; session.worlds.cleanup = saved.cleanup;
+    for (const world of session.worlds.worlds.values()) session.advanceGoal(world);
     for (const [id, pending] of Object.entries(session.pendingInputs)) {
       const world = session.worlds.world(id), actual = await world.runtime!.state();
       const expected = new ChessWorld('validate-input', pending.before); const after = await expected.step({ san: pending.san });
@@ -153,6 +163,7 @@ export class ChessSession {
       const pending = session.points.pendingRestore, runtime = await provider.recover(pending.id);
       if (!runtime) throw new Error('Pending chess rollback runtime is missing');
       await session.checkpoints.recover(runtime, pending.pointId);
+      session.advanceGoal(session.main());
     }
     session.checkpoints.reconcileCapture();
     for (const world of session.worlds.worlds.values()) if (world.runtime) await session.record(world);
@@ -162,7 +173,9 @@ export class ChessSession {
   }
 
   snapshot(): ChessSessionCheckpoint {
-    return structuredClone({ version: this.games || this.pendingNewGame ? 2 : 1, objective: this.objective, policy: this.policy, provenance: this.provenance, ...(this.learning ? { learning: this.learning.identity } : {}),
+    const hasGoals = [...this.worlds.worlds.values(), ...this.points.points.map(point => point.data), ...(this.pendingFork ? [this.pendingFork.baseline] : []),
+      ...(this.games?.completed ?? []).flatMap(game => game.checkpoints.map(point => point.data))].some(world => world.temporaryGoal);
+    return structuredClone({ version: hasGoals ? 3 : this.games || this.pendingNewGame ? 2 : 1, ...(hasGoals ? { goalScopeId: this.goalScopeId } : {}), objective: this.objective, policy: this.policy, provenance: this.provenance, ...(this.learning ? { learning: this.learning.identity } : {}),
       mainId: this.worlds.mainId, worlds: [...this.worlds.worlds.values()].map(world => ({ ...data(world), ...(world.runtime ? { identity: world.runtime.identity } : {}) })),
       cleanup: this.worlds.cleanup, points: this.points, experiences: this.memory.records, pendingFork: this.pendingFork,
       batch: this.batch, pendingInputs: this.pendingInputs, attempts: this.attempts,
@@ -215,7 +228,7 @@ export class ChessSession {
   }
   async pause(): Promise<void> { await this.gate.stop(); }
   async checkpoint(): Promise<string> { let id = ''; await this.gate.run(async () => { this.healthy(); id = (await this.checkpoints.capture()).id; }); return id; }
-  async rollback(id: string): Promise<void> { await this.gate.run(async () => { this.healthy(); await this.checkpoints.restore(id); }); }
+  async rollback(id: string): Promise<void> { await this.gate.run(async () => { this.healthy(); await this.checkpoints.restore(id); this.advanceGoal(this.main()); await this.persist(); }); }
   /** Refuse mid-decision/batch changes. The controller alone publishes its active pointer. */
   async revisionBoundary<T>(work: () => Promise<T>): Promise<T> {
     let result!: T;
@@ -246,7 +259,9 @@ export class ChessSession {
   async guide(objective: string): Promise<void> {
     if (this.revisionFence) throw new Error('Learning revision publication is in progress');
     if (!objective.trim() || objective.length > 2000) throw new Error('Invalid game objective');
-    this.objective = objective; await this.persist();
+    this.objective = objective;
+    for (const world of this.worlds.worlds.values()) this.advanceGoal(world);
+    await this.persist();
   }
   replay(endpointId = this.worlds.mainId) {
     if (!this.games?.completed.some(game => game.endpointId === endpointId)) this.worlds.world(endpointId);
@@ -269,19 +284,30 @@ export class ChessSession {
     this.recordings.protect([...this.worlds.worlds.values()].filter(world => world.runtime).map(world => world.meta.id));
     await this.recordings.collect(); await this.checkpoints.collect();
   }
+  private goalContext(world: SessionChessWorld) {
+    const provenance = this.pinned?.provenance ?? this.pinLearning().provenance;
+    return { player: this.adapter.player, frame: chessGoalFrame({ scopeId: this.goalScopeId, gameId: this.games?.currentId, state: world.state,
+      player: this.adapter.player, objective: this.objective, source: contentRevision('chess-goal-strategy', provenance) }),
+      ...(world.temporaryGoal ? { current: world.temporaryGoal } : {}) };
+  }
+  private advanceGoal(world: SessionChessWorld) {
+    if (world.temporaryGoal?.record.status === 'active') world.temporaryGoal = advanceChessTemporaryGoal(world.temporaryGoal, this.goalContext(world).frame, world.state, this.adapter.player);
+  }
   private async judge(world: SessionChessWorld, signal: AbortSignal): Promise<Judgment> {
     const judged = await decideCurrent({
       capture: () => ({ objective: this.objective }),
       decide: async (capture, current) => {
         const plans = await this.adapter.candidates(world.state), model = this.pinned!.model;
         this.attempts.decisions++;
-        const request: ChessDecisionRequest = { state: structuredClone(world.state), objective: capture.objective,
+        this.advanceGoal(world);
+        const request: ChessDecisionRequest = { temporaryGoal: this.goalContext(world), state: structuredClone(world.state), objective: capture.objective,
           candidates: structuredClone(plans), experience: this.memory.relevant(world.state, 4), revision: this.pinned!.provenance.learning?.revision ?? this.pinned!.provenance.policy };
         return decideChess(model, request, current);
       },
       isCurrent: capture => capture.objective === this.objective,
     }, signal);
-    const { plans, answer } = structuredClone(judged.result);
+    const { plans, answer, temporaryGoal } = structuredClone(judged.result);
+    if (temporaryGoal) { world.temporaryGoal = advanceChessTemporaryGoal(temporaryGoal, this.goalContext(world).frame, world.state, this.adapter.player); await this.persist(); }
 
     return { confidence: answer.confidence, candidates: answer.preferences.map(preference => ({ probability: preference.probability, plan: plans.find(plan => plan.id === preference.id)! })), data: { selected: plans.find(plan => plan.id === answer.selected)!, objective: judged.context.objective } };
   }
@@ -302,7 +328,7 @@ export class ChessSession {
   private async observed(world: SessionChessWorld, state: ChessState, action: string): Promise<void> {
     const before = world.state;
     this.adapter.observe(before, state, world.memory, world.statistics); this.memory.remember(world.meta.id, action, before, state);
-    world.state = state; world.meta.status = state.status === 'ongoing' ? 'paused' : 'ended'; delete this.pendingInputs[world.meta.id];
+    world.state = state; this.advanceGoal(world); world.meta.status = state.status === 'ongoing' ? 'paused' : 'ended'; delete this.pendingInputs[world.meta.id];
     await this.record(world); await this.persist();
   }
   private async explore(signal: AbortSignal): Promise<void> {

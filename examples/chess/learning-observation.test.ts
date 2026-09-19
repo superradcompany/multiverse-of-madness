@@ -58,3 +58,19 @@ test('failure reviews distinguish loss and draw, preserve goals, and refuse inco
   draw.worlds[0]!.state.fen = loss.worlds[0]!.state.fen;
   assert.throws(() => observeChessLearning(draw, undefined, { now }), /saved move history/);
 });
+
+
+test('expired temporary goals trigger a bounded review with the actual outcome and no repeated idle calls', async () => {
+  const { chessGoalFrame, proposeChessTemporaryGoal, advanceChessTemporaryGoal } = await import('./temporary-goal.ts');
+  const base = await fixture(), snapshot = await played(base, ['e4', 'e5', 'Nf3', 'Nc6']);
+  const start = base.worlds[0]!.state, world = snapshot.worlds[0]!;
+  const frame = chessGoalFrame({ scopeId: 'test', state: start, player: 'w', objective: snapshot.objective, source: { id: 'strategy', version: '1' } });
+  const goal = proposeChessTemporaryGoal({ key: 'mate', instruction: 'Seek checkmate', reason: 'Test bounded pursuit', evidence: ['current-state'], duration: 4, target: { kind: 'checkmate' } }, { frame, player: 'w' }, start)!;
+  world.temporaryGoal = advanceChessTemporaryGoal(goal, { ...frame, clock: { unit: 'chess-plies', value: 4 } }, world.state, 'w');
+  const review = observeChessLearning(snapshot, undefined, { now: 1000000 })!;
+  assert.equal(review.mark.issue, 'goal-failed'); assert.equal(review.temporaryGoal!.record.status, 'expired');
+  assert.equal(review.temporaryGoal!.record.id, goal.record.id);
+  assert.equal(observeChessLearning(snapshot, review.mark, { now: 2000000 }), undefined);
+  snapshot.attempts.plies++;
+  assert.equal(observeChessLearning(snapshot, review.mark, { now: 2000000 }), undefined);
+});

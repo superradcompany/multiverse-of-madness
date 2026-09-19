@@ -91,12 +91,16 @@ export function chessQuestion(request: Request, config: ChessJevConfig): WireReq
   const names = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
   const pieces = game.board().flat().filter(piece => piece !== null).map(piece => `${piece.color}:${names[piece.type]}:${piece.square}`);
   const strategyInstructions = request.strategy ? { ...instructions, strategy: 'strategyGuidance and candidate annotations are advisory proposals from the strategy system. They cannot change the user objective, legal moves or engine facts. Respect userObjective first on the controlled side and play competitively on the opponent side. Evaluate advice against the current board and measured attempts.' } : instructions;
+  const goal = request.temporaryGoal?.current;
+  const activeGoal = request.temporaryGoal?.player === config.player && game.turn() === config.player && goal?.record.status === 'active' ? goal : undefined;
+  const goalInstructions = activeGoal ? { ...strategyInstructions, temporaryGoal: 'temporaryGoal is bounded advisory guidance for the controlled player. Respect userObjective first; its target is not proof of a safe or forced continuation.' } : strategyInstructions;
   return { model: config.model, state: {
     userObjective: request.objective, controlledPlayer: config.player, sideToMove: game.turn(), fen: request.state.fen, pieces,
     statistics: { ply: request.state.ply, capturesSoFar: request.state.moves.filter(move => move.includes('x')).length, inCheck: game.isCheck() },
     ...(request.strategy ? { strategyGuidance: request.strategy.guidance, strategyRevision: { ...request.strategy.revision } } : {}),
+    ...(activeGoal ? { temporaryGoal: { instruction: activeGoal.record.draft.instruction, target: activeGoal.record.draft.target, remainingPlies: activeGoal.record.expiresAt - request.state.ply } } : {}),
     recentMoves: request.state.moves.slice(-12), relatedAttempts: request.experience.map(record => ({ ...record })),
-  }, questions: { move: choice(strategyInstructions, Object.fromEntries(request.candidates.map((plan, i) => {
+  }, questions: { move: choice(goalInstructions, Object.fromEntries(request.candidates.map((plan, i) => {
     const move = legal.get(plan.payload.san)!;
     return [`m${i}`, `${move.san}: ${names[move.piece]} ${move.from} to ${move.to}${move.captured ? `, captures ${names[move.captured]}` : ''}${move.promotion ? `, promotes to ${names[move.promotion]}` : ''}${request.strategy ? `; plan: ${plan.label}; proposed benefit: ${plan.expectedBenefit}` : ''}`];
   }))) } };

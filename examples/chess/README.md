@@ -667,3 +667,30 @@ values and no additional model/executor work. Both viewers expose the action;
 the plain session's finished board was left intact. Browser checks cover replay,
 refresh and widths 320/390/768/1440. Evidence:
 `artifacts/chess-new-game/2026-09-18/`.
+
+### Temporary goals
+
+A strategy planner can return `chess-preparation/2` with an optional temporary
+goal, separate from your main objective. Targets include occupying a square with
+a specified piece, reaching a material balance, giving check or delivering
+checkmate. The host checks the board and ends the goal on completion, failure,
+expiry or a changed game, guide or strategy. Deadlines use half-moves; reaching
+the deadline expires the goal before checking completion. Repeated keys never
+renew deadlines. Opponent decisions do not receive the controlled side's goal.
+
+The sidebar shows the current goal and outcome. Goals follow futures, promotion,
+selected replays, saved games and checkpoints. A new game starts a new pursuit;
+old game evidence remains available in replay. Failed or expired goals can cause
+an automatic review using the existing cooldown and duplicate suppression.
+
+Goal-bearing sessions use format 3; this build reads older formats, while older
+builds reject format 3 rather than discard goal state. The prior preparation ABI
+remains supported. Lifecycle qualification with real VM preparation and Jev:
+
+```bash
+node --env-file=.env --import tsx scripts/qualification/chess-goals.ts
+```
+
+This fixture checks integration and cleanup. It does not establish stronger chess
+play or autonomous generation of useful goals. Board worlds remain local exact
+histories; only strategy execution uses VMs.

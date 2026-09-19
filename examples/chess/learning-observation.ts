@@ -6,7 +6,7 @@ import type { ChessSessionCheckpoint } from './session-types.ts';
 import type { ChessState } from './runtime.ts';
 import type { ChessStrategyEvidence } from './strategy-proposal.ts';
 
-export type ChessLearningIssue = 'bootstrap' | 'goal-changed' | 'repetition' | 'material-loss' | 'lost-game' | 'draw';
+export type ChessLearningIssue = 'bootstrap' | 'goal-changed' | 'repetition' | 'material-loss' | 'lost-game' | 'draw' | 'goal-failed';
 export interface ChessLearningMark {
   key: string; objective: string; revision: VersionRef; issue: ChessLearningIssue;
   attemptedPlies: number; selectedPlies: number; observedAt: number;
@@ -15,6 +15,7 @@ export interface ChessLearningEvidence extends LearningObservation<ChessLearning
   /** Host-authored exact history immediately before the incident window, never just a FEN. */
   incident: ChessState;
   observations: ChessStrategyEvidence['observations'];
+  temporaryGoal?: ChessStrategyEvidence['temporaryGoal'];
 }
 export const chessReviewIntervalMs = 120000;
 
@@ -50,6 +51,7 @@ export function observeChessLearning(snapshot: ChessSessionCheckpoint, previous?
     : state.status === 'draw' ? 'draw'
     : (positions.get(positionKey(state.fen)) ?? 0) >= 2 ? 'repetition'
     : observations.length >= 4 && adapter.value(state) - adapter.value(incident) <= -2 ? 'material-loss'
+    : world.temporaryGoal && ['expired', 'failed'].includes(world.temporaryGoal.record.status) ? 'goal-failed'
     : options.bootstrap && !previous && state.ply >= 4 ? 'bootstrap' : undefined;
   if (!issue || (state.status === 'checkmate' && state.turn !== player && !goalChanged)) return;
   const revision = options.revision ?? snapshot.provenance.learning?.revision ?? snapshot.provenance.model;
@@ -58,9 +60,10 @@ export function observeChessLearning(snapshot: ChessSessionCheckpoint, previous?
   // A failed review may be revisited only after substantial new attempts and a longer cooldown.
   if (previous?.key === key && (snapshot.attempts.plies - previous.attemptedPlies < 8 || now - previous.observedAt < 300000)) return;
   return { mark: { key, objective: snapshot.objective, revision: { ...revision }, issue, attemptedPlies: snapshot.attempts.plies, selectedPlies: state.ply, observedAt: now },
-    incident, observations, reason: reasons[issue] };
+    incident, observations, ...(world.temporaryGoal ? { temporaryGoal: structuredClone(world.temporaryGoal) } : {}), reason: reasons[issue] };
 }
 const reasons: Record<ChessLearningIssue, string> = {
+  'goal-failed': 'The temporary goal expired or failed. Use its recorded outcome and board history to revise the plan without changing the user objective or blindly renewing the deadline.',
   bootstrap: 'Create a reusable strategy from the game contract and initial observed play.',
   'goal-changed': 'Adapt strategy to the new user goal while preserving that goal exactly.',
   repetition: 'The selected run has revisited the same position; find alternatives that make progress instead of repeating the loop.',

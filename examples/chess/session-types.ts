@@ -1,4 +1,5 @@
 import type { ActivationRef, CheckpointJournal, CheckpointRecord, ForkIntent, PlanDefinition, VersionRef, WorldMetadata, RuntimeReference } from '@multiverse/gameplay-harness';
+import type { ChessTemporaryGoal } from './temporary-goal.ts';
 import type { ChessExperience, ChessMemory, ChessPlan, ChessStatistics } from './adapter.ts';
 import type { ChessState } from './runtime.ts';
 import type { StoredChessWorld } from './runtime-store.ts';
@@ -14,6 +15,7 @@ export interface ChessWorldData {
   statistics: ChessStatistics;
   provenance: ChessProvenance;
   guidance: string;
+  temporaryGoal?: ChessTemporaryGoal;
   opening?: PlanDefinition<ChessPlan>;
 }
 export interface SessionChessWorld extends ChessWorldData { runtime?: StoredChessWorld }
@@ -35,7 +37,8 @@ export interface ChessGames {
 }
 export interface PendingChessGame { id: string; previousMainId: string; createdAt: number }
 export interface ChessSessionCheckpoint {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
+  goalScopeId?: string;
   objective: string;
   policy: ChessPolicy;
   provenance: ChessProvenance;

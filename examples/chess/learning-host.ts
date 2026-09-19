@@ -132,7 +132,7 @@ export async function openChessLearningHost(directory: string, decision: ChessJe
           const provider = await CodexCliSupervisor.open<ChessPolicy, ChessStrategyEvidence>({ record: value => save(`${prefix}/generation.json`, value) });
           const proposed = await proposeChessStrategy({ id, origin: mark.origin, current, objective: mark.evidence.mark.objective,
             game: describeChess(adapter.version, runtime.capabilities), contract: chessIncidentContractVersion,
-            observations: mark.evidence.observations, recentEvaluations, review: { reason: mark.evidence.reason, issue: mark.evidence.mark.issue },
+            observations: mark.evidence.observations, temporaryGoal: mark.evidence.temporaryGoal, recentEvaluations, review: { reason: mark.evidence.reason, issue: mark.evidence.mark.issue },
             provider, store, ledger: supervisorLedger, limits: { timeoutMs: 300000, maxInputBytes: 65536, maxOutputBytes: 65536, maxCostMicros: 2000000 },
           }, signal);
           await save(`${prefix}/proposal.json`, proposed); signal.throwIfAborted();
