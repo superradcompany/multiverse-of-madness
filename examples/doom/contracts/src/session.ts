@@ -4,12 +4,24 @@ import type { AiSkill } from './skills.ts';
 import type { DoomTemporaryGoal } from './temporary-goal.ts';
 export interface PlanView { label: string; steps: string[]; step: number; status: 'running' | 'complete' | 'replan' | 'horizon'; reason?: string }
 export interface LearningProvenance { activation: ActivationRef; adapter: VersionRef; executor: VersionRef; model: VersionRef }
+/** Host wall times for a prepared decision. Judgment includes its usage journal, not just inference. */
+export interface PreparedDecisionTiming {
+  contextMs: number; preparationMs: number; judgmentMs: number;
+  executorRunId: string; executorElapsedMs: number;
+}
+/** Latest consumed decision for this world; diagnostic only, never an outcome score. */
+export interface WorldDecisionTiming {
+  id: string; consumedAt: number; sourceTick: number; consumedTick: number;
+  requestMs: number; waitMs: number; prefetched: boolean;
+  stages?: PreparedDecisionTiming;
+}
 export interface DecisionOptionsView {
   tick: number; kind: 'plans' | 'actions'; selected: string;
   options: Array<{ id: string; label: string; steps?: string[]; evidence?: string }>;
   changes?: { tick: number; added: string[]; removed: string[]; updated: string[] };
 }
 export interface WorldView {
+  decisionTiming?: WorldDecisionTiming;
   temporaryGoal?: DoomTemporaryGoal;
   decisionOptions?: DecisionOptionsView;
   learning?: LearningProvenance;

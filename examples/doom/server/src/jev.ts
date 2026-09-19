@@ -1,5 +1,6 @@
 import type { DoomGoalContext } from './doom-temporary-goal.ts';
 import type { DoomTemporaryGoal } from '../../contracts/src/temporary-goal.ts';
+import type { PreparedDecisionTiming } from '../../contracts/src/session.ts';
 import type { PreviousPlanFeedback } from './plan-feedback.ts';
 import { jevGuidance, learnedInstructions, learnedState, type JevLearning } from './jev-learning.ts';
 import { activeSkills, type AiSkill } from '../../contracts/src/skills.ts';
@@ -37,6 +38,7 @@ export interface JevDecisionTrace {
   plans?: GamePlan[];
 }
 export interface Decision {
+  timings?: PreparedDecisionTiming;
   temporaryGoal?: DoomTemporaryGoal;
   jevTrace?: JevDecisionTrace;
   selectedExperience?: Experience[];

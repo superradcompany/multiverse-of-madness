@@ -89,11 +89,43 @@ saved world states averaged about 0.0042 ms per check over 50,000 checks. That i
 only repeated-state CPU cost, not live performance or proof of pause reduction.
 The change is not deployed to the stopped demo and has no new VM qualification.
 
+## Decision timing coverage
+
+The host now attaches the latest consumed decision's timing to each world, so
+parallel futures are observable independently of the main-session summary.
+Prepared decisions report context/source loading, isolated preparation (including
+validation and journal waits), and judgment (including Jev and usage journaling).
+Their executor run ID links directly to the corresponding executor journal record.
+Executor elapsed time is nested inside preparation; do not add it again.
+
+Request duration and boundary wait remain separate: prefetch can finish most work
+before consumption, while rejecting stale work can make a boundary wait exceed the
+fresh request duration. Source and consumption ticks make that distinction visible.
+Only the latest metadata is retained on each world. It contains no request payload,
+model response, source code or credentials, and never changes gameplay scores.
+Older sessions without this optional field still load.
+
+Observer format 3 (`scripts/observe-live-performance.ts`) adds individual world
+samples and stage distributions while preserving the existing main-decision
+summary. It excludes initial metadata and decisions consumed before observation,
+including historical decisions reintroduced by rollback. This assumes synchronized
+server/observer wall clocks. It can still miss overwritten or failed/cancelled
+decisions; it is not a complete request journal. The observer now captures its
+start wall time directly rather than reconstructing it after shutdown/polling.
+Do not run it until the demo is intentionally resumed.
+
+An offline journal check used a copied historical 4 MB, 4,386-record journal in a
+temporary directory, leaving the source unchanged. Across 32 saves in eight
+four-write bursts, median serialization was 1.34 ms, completion was 6.69 ms, and
+burst completion was 10.24 ms. This isolated host measurement does not explain
+the approximately 600 ms decision waits and does not justify changing persistence
+formats. Details: `artifacts/performance-analysis/2026-09-19/journal-cost.json`.
+
 ## Remaining verification
 
-- Correlate individual decisions with preparation, Jev, journal, fork and
-  checkpoint timings. The observer's session-level metadata misses most parallel
-  decisions, and delivered frame versions do not measure browser paint FPS.
+- Collect the new per-world timing samples and match their executor IDs to phase
+  measurements. Fork/checkpoint timings and individual journal waits still need
+  correlation; delivered frame versions do not measure browser paint FPS.
 - Measure how much preparation/prefetch work is consumed versus invalidated.
   Evaluate moving provisioning off the decision path while preserving fresh
   invocation isolation, revision provenance and joined cancellation/cleanup.

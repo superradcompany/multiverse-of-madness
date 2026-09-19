@@ -21,22 +21,23 @@ async function fixture() {
   const policy = new Session({ decide: async () => decision }).learningPolicy(); policy.memory.enabled = true; policy.memory.perDecision = 1;
   const revision = doomLearningArtifact({ policy, prompts: {}, skills: [], adapter: { id: 'test', version: '1' }, executor: source.revision, model: { id: 'prepared-doom-jev', version: 'jev-latest' } });
   const preparations: any[] = [], requests: any[] = [], records: unknown[] = [];
-  const hooks: { invalid?: boolean; abort?: () => void; goal?: DoomGoalProposal } = {};
+  const hooks: { invalid?: boolean; abort?: () => void; goal?: DoomGoalProposal; onExecute?: () => void; onRecord?: () => void; onRequest?: () => void } = {};
   const executor: ExecutableProvider = { version: { id: 'test', version: '1' }, execute: async (artifact, input, limits) => {
-    const packet = input as any; preparations.push(packet); hooks.abort?.();
+    const packet = input as any; preparations.push(packet); hooks.abort?.(); hooks.onExecute?.();
     return { value: { abi: hooks.goal ? 'doom-preparation/2' : 'doom-preparation/1', ...(hooks.goal ? { temporaryGoal: hooks.goal } : {}), historyIndices: [], experienceIndices: hooks.invalid ? [99] : packet.experienceLimit ? [1] : [], features: { avoidRepeatedHeading: true },
       ...(packet.planTicks ? { plans: [{ id: 'learned_opening', label: 'Test a generated opening', steps: [{ kind: 'move', label: 'Follow new waypoint', target: { kind: 'point', x: initial.x + 96, y: initial.y + 32, z: initial.z }, maxTicks: 35 }] }] } : {}) },
       receipt: { revision: artifact.revision, provider: executor.version, limits, runtime: { id: 'fixture', identity: 'fixture', image: 'fixture' }, status: 'complete', startedAt: 0, elapsedMs: 3, stdoutBytes: 100, stderrBytes: 0 } };
   } };
   const client = { systemOne: async (body: any) => {
     requests.push(structuredClone(body));
+    hooks.onRequest?.();
     return { model: 'fixture-jev', usage: { input_tokens: 10, output_tokens: 2 }, answers: Object.fromEntries(Object.entries(body.questions).map(([key, question]: [string, any]) => {
       const ids = Object.keys(question.criteria), choice = ids.includes('wait') ? 'wait' : ids[0];
       return [key, { choice, confidence: 1, probabilities: Object.fromEntries(ids.map(id => [id, Number(id === choice)])) }];
     })) };
   } } as unknown as Pick<TypeSafeClient, 'systemOne'>;
   const ledger = new BudgetLedger({ simulationUnit: 'doom-ticks', limits: { executorCalls: 4, modelCalls: 4 } });
-  const model = new DoomPreparedModel(revision, { store, executor, client, ledger, limits: { timeoutMs: 1000, cpus: 1, memoryMiB: 128, maxInputBytes: 1048576, maxOutputBytes: 16384 }, record: async value => { records.push(value); } });
+  const model = new DoomPreparedModel(revision, { store, executor, client, ledger, limits: { timeoutMs: 1000, cpus: 1, memoryMiB: 128, maxInputBytes: 1048576, maxOutputBytes: 16384 }, record: async value => { records.push(value); hooks.onRecord?.(); } });
   const memory = (action: string): Experience => ({ worldId: action, action, start: { episode: 1, map: 1, x: 0, y: 0, z: 0, angle: 0, health: 100, ammo: true }, result: { ticks: 35, health: -10, kills: 0, ammo: 0, moved: 0, died: false, exited: false } });
   const experience = [memory('host-selected'), memory('program-selected')];
   return { model, revision, policy, preparations, requests, records, ledger, experience, hooks, cleanup: () => rm(directory, { recursive: true, force: true }) };
@@ -56,6 +57,21 @@ test('prepared Jev uses generated plans and independently selected memory while 
     assert.deepEqual(result.preparation!.experienceIndices, [1]); assert.equal(result.model, 'fixture-jev');
     assert.equal(f.ledger.used('executorCalls'), 1); assert.equal(f.ledger.used('modelCalls'), 1); assert.equal(f.ledger.used('inputTokens'), 10);
     assert.equal(f.records.length, 1);
+  } finally { await f.cleanup(); }
+});
+test('timing includes preparation persistence and correlates the executor without treating receipt time as total latency', async t => {
+  const f = await fixture();
+  try {
+    f.policy.memory.enabled = false;
+    let now = 0;
+    t.mock.method(performance, 'now', () => now);
+    f.hooks.onExecute = () => { now = 10; };
+    f.hooks.onRecord = () => { now = 30; };
+    f.hooks.onRequest = () => { now = 70; };
+    const result = await f.model.decide(initial, 'Explore', [], new AbortController().signal, [], 35, { policy: f.policy });
+    assert.deepEqual(result.timings, { contextMs: 0, preparationMs: 30, judgmentMs: 40, executorRunId: 'fixture', executorElapsedMs: 3 });
+    assert.equal(result.latencyMs, 70);
+    assert.equal(f.requests[0].state.timings, undefined);
   } finally { await f.cleanup(); }
 });
 test('disabled memory stays unavailable to preparation and action mode stays action-only', async () => {

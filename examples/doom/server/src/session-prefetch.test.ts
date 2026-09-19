@@ -36,6 +36,13 @@ test('Jev plans during real session advancement and a fresh result avoids anothe
     assert.equal(calls[1]!.context?.planningAhead?.remainingTicks, 28);
     assert.equal(session.snapshot().decision?.prefetched, true);
     assert.equal(session.snapshot().decision?.tick, initial.tick + 35);
+    const timing = session.snapshot().worlds[0]!.decisionTiming!;
+    assert.equal(timing.sourceTick, initial.tick + 7);
+    assert.equal(timing.consumedTick, initial.tick + 35);
+    assert.equal(timing.prefetched, true);
+    assert.equal(timing.waitMs, session.snapshot().decision!.waitMs);
+    assert.equal(timing.stages, undefined, 'a plain model must not invent preparation timings');
+    assert.deepEqual(session.checkpoint().view.worlds[0]!.decisionTiming, timing);
   } finally { finish(); await session.pause(); await paused; }
   assert.equal(session.snapshot().error, undefined);
 });

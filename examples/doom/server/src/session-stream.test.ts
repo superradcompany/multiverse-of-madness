@@ -41,6 +41,8 @@ test('session patches preserve exact wire state through frame, decision, removal
     view => { view.worlds[0]!.frameVersion++; view.worlds[0]!.state.health--; },
     view => { view.objective = 'Reach the exit'; view.running = true; },
     view => { delete view.error; view.worlds.push({ ...structuredClone(view.worlds[0]!), id: 'future', role: 'experiment' }); },
+    view => { view.worlds[1]!.decisionTiming = { id: 'future-decision', consumedAt: 1000, sourceTick: 7, consumedTick: 35,
+      requestMs: 70, waitMs: 5, prefetched: true, stages: { contextMs: 1, preparationMs: 29, judgmentMs: 40, executorRunId: 'run-1', executorElapsedMs: 20 } }; },
     view => { view.worlds.reverse(); view.mainId = 'future'; },
     view => { view.worlds = view.worlds.filter(world => world.id === 'future'); view.running = false; },
   ];

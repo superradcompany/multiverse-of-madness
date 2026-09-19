@@ -41,7 +41,7 @@ type DecisionQuestion = {
   objective: string; skillsRevision: number; experience: Experience[]; policy: DoomPolicyRecord;
   learning?: WorldView['learning']; context: DecisionContext; actionTicks: number;
 };
-type DecisionAnswer = { decision: Decision; experience: Experience[]; policy: DoomPolicyRecord;
+type DecisionAnswer = { observedTick: number; decision: Decision; experience: Experience[]; policy: DoomPolicyRecord;
   skillsRevision: number; learning?: WorldView['learning'] };
 type DoomFork = ForkIntent & {
   learning?: WorldView['learning'];
@@ -925,8 +925,9 @@ export class Session extends EventEmitter {
   }
   private async answerQuestion(question: DecisionQuestion, signal: AbortSignal): Promise<DecisionAnswer> {
     const { state, objective, history, model, experience, actionTicks, context, policy, skillsRevision, learning } = question;
+    const observedTick = state.tick;
     const decision = await model.decide(state, objective, history, signal, experience, actionTicks, context);
-    return { decision, experience: decision.selectedExperience ?? experience, policy, skillsRevision, learning };
+    return { observedTick, decision, experience: decision.selectedExperience ?? experience, policy, skillsRevision, learning };
   }
   private prepareNextDecision(world: World, signal: AbortSignal): void {
     const pending = this.nextDecisions.get(world.view.id);
@@ -988,6 +989,9 @@ export class Session extends EventEmitter {
       result = fresh.result;
     }
     result.decision = { ...result.decision, prefetched, waitMs: performance.now() - started };
+    world.view.decisionTiming = { id: randomUUID(), consumedAt: Date.now(), sourceTick: result.observedTick, consumedTick: world.view.state.tick,
+      requestMs: result.decision.latencyMs, waitMs: result.decision.waitMs!, prefetched,
+      ...(result.decision.timings ? { stages: structuredClone(result.decision.timings) } : {}) };
     if (result.decision.temporaryGoal) {
       world.view.temporaryGoal = advanceDoomTemporaryGoal(result.decision.temporaryGoal, this.goalFrame(world), world.view.state);
       await this.persist();

@@ -296,6 +296,17 @@ This removes one avoidable boundary wait; live pause reduction remains unverifie
 and the stopped demo has not been upgraded. Type checking, 411 application tests,
 127 harness tests and the production build passed.
 
+Per-world timing coverage (2026-09-19): prepared decisions now expose separate
+context, preparation and judgment durations, executor receipt identity, request
+duration and consumption wait. The observer captures parallel-world samples and
+excludes historical metadata restored by rollback using consumption timestamps.
+Controlled tests cover phase attribution including preparation persistence,
+prefetch source/consumption ticks, saved metadata and both stream protocols.
+An offline copied-journal check measured 6.69 ms median save completion; it does
+not explain the long decision waits. Fresh live samples, fork/checkpoint
+correlation and browser FPS remain outstanding. Type checking, 412 application
+tests and the production build passed. No demo or VM was started.
+
 ## 7. Complete the viewer and replay experience
 
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,

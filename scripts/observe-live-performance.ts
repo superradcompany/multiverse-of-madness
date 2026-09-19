@@ -1,7 +1,7 @@
 /** Read-only delivery measurements against an already running demo; creates no VMs or model calls. */
 import { writeFile } from 'node:fs/promises';
 import WebSocket from 'ws';
-import type { SessionView } from '../examples/doom/contracts/src/session.ts';
+import type { SessionView, WorldDecisionTiming } from '../examples/doom/contracts/src/session.ts';
 import { applySessionUpdate, type SessionPatch, type SessionUpdate } from '../examples/doom/contracts/src/session-stream.ts';
 
 const origin = new URL(process.argv[2] ?? 'http://localhost:4320');
@@ -12,6 +12,7 @@ if (!['mom-session-patches', 'mom-session-updates'].includes(protocol)) throw ne
 if (!['http:', 'https:'].includes(origin.protocol) || !Number.isFinite(seconds) || seconds < 5 || seconds > 3600)
   throw new Error('Usage: observe-live-performance.ts [http://host:port] [seconds: 5..3600] [report.json]');
 const started = performance.now();
+const startedAt = Date.now();
 const stages = new Map<string, number>();
 const gaps = new Map<string, number[]>();
 const frames = new Map<string, { version: number; at: number; thinking: boolean; stage: string; paused: boolean; transition: boolean }>();
@@ -20,6 +21,8 @@ const requests: number[] = [];
 const frameRequests: number[] = [];
 const decisions: Array<NonNullable<SessionView['decision']>> = [];
 const seenDecisions = new Set<string>();
+const worldDecisions: Array<WorldDecisionTiming & { worldId: string }> = [];
+const seenWorldDecisions = new Set<string>();
 const learning: Array<{ atSeconds: number; enabled: unknown; busy: unknown; jobs: unknown }> = [];
 let view: SessionView | undefined;
 let initial: SessionView | undefined;
@@ -52,6 +55,7 @@ address.protocol = origin.protocol === 'https:' ? 'wss:' : 'ws:';
 const socket = new WebSocket(address, protocol, { origin: origin.origin });
 socket.on('error', error => errors.push(error.message));
 socket.on('message', data => {
+  if (stopped) return;
   try {
     const now = performance.now();
     account(now);
@@ -68,6 +72,11 @@ socket.on('message', data => {
     lastMainId = view.mainId;
     const activeIds = new Set<string>();
     for (const world of view.worlds.filter(world => world.role !== 'archived')) {
+      const timing = world.decisionTiming;
+      if (timing && !seenWorldDecisions.has(timing.id)) {
+        seenWorldDecisions.add(timing.id);
+        if (updates > 1 && timing.consumedAt >= startedAt) worldDecisions.push({ ...timing, worldId: world.id });
+      }
       activeIds.add(world.id);
       const before = frames.get(world.id);
       if (before) {
@@ -123,10 +132,13 @@ account(performance.now());
 socket.close();
 while (polling) await new Promise(resolve => setTimeout(resolve, 50));
 const durationSeconds = (previousAt - started) / 1000;
-const report = { format: 2, protocol, startedAt: new Date(Date.now() - durationSeconds * 1000).toISOString(), durationSeconds,
+const report = { format: 3, protocol, startedAt: new Date(startedAt).toISOString(), durationSeconds,
   limitations: ['Measures delivered frame-version changes, not browser paint FPS or isolated simulation speed.',
     'Gap categories describe observed state and can include lifecycle waits; they do not establish causation.',
     'Decision metadata covers the session-level latest decision, not every parallel-world Jev request.',
+    'World timings cover consumed decisions delivered during observation, excluding initial state; cancelled/failed or overwritten decisions may be absent.',
+    'World timing windows assume synchronized observer/server wall clocks. Historical decisions restored by rollback are excluded by consumedAt.',
+    'Preparation includes executor, validation and journal waits; judgment includes Jev and usage journaling. Receipt elapsed is nested in preparation, not additive.',
     'Main-world changes include rollback and manual selection, not only winning promotions.',
     'Read-only observer adds one stream and a learning/frame HTTP probe every five seconds.'],
   initial: summarize(initial), final: summarize(view), updates, deliveredBytes: bytes, kibibytesPerSecond: bytes / 1024 / durationSeconds, mainWorldChanges,
@@ -136,6 +148,12 @@ const report = { format: 2, protocol, startedAt: new Date(Date.now() - durationS
   decisions: { count: decisions.length, prefetched: decisions.filter(decision => decision.prefetched).length,
     wait: distribution(decisions.flatMap(decision => decision.waitMs === undefined ? [] : [decision.waitMs])),
     request: distribution(decisions.flatMap(decision => decision.latencyMs === undefined ? [] : [decision.latencyMs])) },
+  worldDecisions: { count: worldDecisions.length, prefetched: worldDecisions.filter(decision => decision.prefetched).length,
+    wait: distribution(worldDecisions.map(decision => decision.waitMs)), request: distribution(worldDecisions.map(decision => decision.requestMs)),
+    context: distribution(worldDecisions.flatMap(decision => decision.stages ? [decision.stages.contextMs] : [])),
+    preparation: distribution(worldDecisions.flatMap(decision => decision.stages ? [decision.stages.preparationMs] : [])),
+    judgment: distribution(worldDecisions.flatMap(decision => decision.stages ? [decision.stages.judgmentMs] : [])),
+    samples: worldDecisions },
   learning, errors };
 await writeFile(output, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify({ output, durationSeconds, updates, mainWorldChanges, errors }));
