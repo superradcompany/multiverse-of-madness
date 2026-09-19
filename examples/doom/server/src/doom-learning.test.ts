@@ -256,7 +256,7 @@ test('supervised execution policy drives session inputs and retains historical p
   try {
     f.hooks.decision = { ...decision, confidence: 1, plans: { selected: 'interact', candidates: [{ id: 'interact', label: 'try switch', probability: 1,
       steps: [{ kind: 'use', label: 'press and release', target: { kind: 'point', x: 32, y: 0, z: 0 }, maxTicks: 140 }] }] } };
-    const execution = { ...defaultDoomExecutionPolicy, usePulseTicks: 2 };
+    const execution = { ...defaultDoomExecutionPolicy, usePulseTicks: 2, navigationAlignmentDegrees: 3, movementAlignmentDegrees: 10 };
     const { revision: _, ...fields } = f.baseline;
     const candidate = { ...fields, policy: { ...fields.policy, execution } };
     await f.propose('execution', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
@@ -432,5 +432,39 @@ test('a user stagnation override survives supervised activation, reconnect, roll
       assert.throws(() => parseDoomLearningPolicy({ ...fields.policy, stallForkSeconds: value }));
     }
     assert.equal(f.session.snapshot().stallForkSeconds, 20);
+  } finally { await f.cleanup(); }
+});
+
+for (const kind of ['face', 'move'] as const) test(`supervised ${kind} alignment changes actual session inputs at the next decision`, async () => {
+  const commands: Step[] = [];
+  class Stationary extends Runtime {
+    override async step(command: Step) { commands.push(structuredClone(command)); return super.step(command); }
+    override async branch(ids: string[]) { const state = await this.state(); return ids.map(id => new Stationary(id, structuredClone(state))); }
+  }
+  const f = await fixture(false, new Stationary('root'));
+  try {
+    const radians = (kind === 'face' ? 5 : 20) * Math.PI / 180;
+    const target = { kind: 'point' as const, x: 128 * Math.cos(radians), y: 128 * Math.sin(radians), z: 0 };
+    const plan = { id: 'route', label: 'route', probability: 1, steps: [
+      ...(kind === 'face' ? [{ kind, label: 'face', target, maxTicks: 105 }] : []),
+      { kind: 'move' as const, label: 'move', target, maxTicks: 140 },
+    ] };
+    f.hooks.decision = { ...decision, confidence: 1, plans: { selected: plan.id, candidates: [plan] } };
+    await f.step();
+    assert.ok(commands.length > 0);
+    assert.ok(commands.every(command => command.inputs.includes('forward')));
+    await f.promote(); commands.length = 0;
+    const execution = { ...defaultDoomExecutionPolicy, navigationAlignmentDegrees: 3, movementAlignmentDegrees: 10 };
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, execution } };
+    await f.propose('navigation', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('navigation'); await f.step();
+    assert.ok(commands.length > 0);
+    assert.ok(commands.every(command => command.inputs.length === 1 && command.inputs[0] === 'left'));
+    const saved = f.session.checkpoint();
+    const world = saved.worlds.find(world => world.view.id === saved.experiments[0]!.id)!;
+    assert.equal(world.plan!.step, 0, 'post-tick refresh must use the same pinned alignment');
+    await f.promote(); await f.save(); await f.reopen();
+    assert.deepEqual(f.session.learningPolicy().execution, execution);
   } finally { await f.cleanup(); }
 });

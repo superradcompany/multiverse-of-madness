@@ -43,6 +43,16 @@ decision duration, planning mode, winner delay, memory, recovery, search reward
 weights, and bounded execution/motor settings. Explicit user edits apply after
 revision policy; the user's maximum futures is a ceiling on learned breadth.
 
+Execution policy also accepts optional `navigationAlignmentDegrees` (1–20,
+default 7) for non-combat facing and interaction, and `movementAlignmentDegrees`
+(1–90, default 25) for turning before advancing toward a target. Combat facing
+continues to use the motor's aim tolerance. These settings are pinned to each
+decision and used in live and evaluation sessions. Smaller values can increase
+turning time; improvement must be demonstrated by comparison, not assumed.
+Omitting them preserves historical policy contents and behavior. Older hosts
+reject policies containing the new fields; saved supervised sessions require
+the explicit gameplay-build upgrade before using them.
+
 Preparation source can generate validated plan candidates, select supplied
 history/experience and provide guidance. Candidate menus allow up to ten plans;
 menu size and parallel future count are separate. The host retains legal controls,

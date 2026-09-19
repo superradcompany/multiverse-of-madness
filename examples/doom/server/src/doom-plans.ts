@@ -171,7 +171,7 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
     const bearing = bearingTo(state, target);
     // Combat alignment and the motor's fire gate must use the same decision
     // policy; otherwise the plan stops turning where the motor refuses to fire.
-    const alignment = target.kind === 'enemy' ? motor.aimToleranceDegrees : 7;
+    const alignment = target.kind === 'enemy' ? motor.aimToleranceDegrees : (execution.navigationAlignmentDegrees ?? 7);
     const complete = step.kind === 'face' ? Math.abs(bearing) <= alignment : step.kind === 'move' && target.kind !== 'pickup' && distance(state, target) <= (step.within ?? 24);
     if (complete) {
       run.step++;
@@ -186,7 +186,7 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
       step.kind === 'strafeAttack' ? 'complete' : 'replan', step.kind === 'use' ? 'interaction attempted; re-observe the result' : step.kind === 'strafeAttack' ? 'moving attack interval complete' : 'step time limit reached');
     if (step.kind === 'use') {
       if (distance(state, target) > doomPlanPolicy.useDistance) return stopPlan(run, 'replan', 'interaction out of reach');
-      if (Math.abs(bearing) > 7) return [bearing > 0 ? 'left' : 'right'];
+      if (Math.abs(bearing) > (execution.navigationAlignmentDegrees ?? 7)) return [bearing > 0 ? 'left' : 'right'];
       // Use is edge-triggered in Doom. Release between attempts.
       return (state.tick - run.stepStarted.tick) % execution.usePulseTicks === 0 ? ['use'] : [];
     }
@@ -199,7 +199,7 @@ export function planInputs(run: PlanExecution, state: GameState, history: GameSt
       const recent = history.filter(s => s.tick >= state.tick - 9 && s.tick >= run.stepStarted.tick && s.map === state.map && s.episode === state.episode);
       if (state.tick - run.stepStarted.tick >= execution.blockedAfterTicks && recent.length >= 8 && recent.every(s => distance(s, state) < 2 && Math.abs(s.angle - state.angle) < 4)) return stopPlan(run, 'replan', 'route blocked');
     }
-    if (Math.abs(bearing) > (step.kind === 'move' ? 25 : alignment)) return [bearing > 0 ? 'left' : 'right'];
+    if (Math.abs(bearing) > (step.kind === 'move' ? (execution.movementAlignmentDegrees ?? 25) : alignment)) return [bearing > 0 ? 'left' : 'right'];
     return step.kind === 'attack' ? ['fire'] : ['forward', 'use'];
   }
   return stopPlan(run, 'complete', 'plan complete');

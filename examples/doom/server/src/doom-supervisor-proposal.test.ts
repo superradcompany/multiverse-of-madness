@@ -145,7 +145,7 @@ test('supervisor execution settings become a candidate artifact without changing
   const f = await fixture();
   try {
     const original = f.session.learningPolicy();
-    const execution = { ...defaultDoomExecutionPolicy, blockedAfterTicks: 14, damageBeforeReplan: 4 };
+    const execution = { ...defaultDoomExecutionPolicy, blockedAfterTicks: 14, damageBeforeReplan: 4, navigationAlignmentDegrees: 3, movementAlignmentDegrees: 10 };
     const motor = { ...defaultDoomMotorPolicy, stalledTicks: 3 };
     f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution, motor, stallForkSeconds: 3 } });
     const result = await f.run();

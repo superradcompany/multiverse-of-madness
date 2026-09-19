@@ -6,6 +6,8 @@ export const doomExecutionPolicySchema = z.strictObject({
   nearbyThreatDistance: z.number().min(0).max(768),
   blockedAfterTicks: z.number().int().min(1).max(350),
   usePulseTicks: z.number().int().min(2).max(35),
+  navigationAlignmentDegrees: z.number().min(1).max(20).optional(),
+  movementAlignmentDegrees: z.number().min(1).max(90).optional(),
 });
 export type DoomExecutionPolicy = z.infer<typeof doomExecutionPolicySchema>;
 

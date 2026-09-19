@@ -271,6 +271,18 @@ policy field; saved supervised games require the explicit build handoff before
 using it. Validation passed: 468 application tests, four web tests, type checking
 and the production build.
 
+Navigation-policy progress (2026-09-19): supervisor execution revisions can now
+tune non-combat facing/interaction alignment and the turn-before-movement angle.
+Both were fixed constants. Optional fields preserve omitted historical policy
+contents and defaults; combat alignment and engine interaction reach remain
+separate. Controlled session tests demonstrate changed emitted inputs and
+post-tick plan state after activation; proposal persistence, reconnect, rollback
+and validation checks cover the new settings. This establishes policy wiring,
+not autonomous navigation improvement. No saved demo or VM was started. Older
+hosts reject these new policy fields; saved supervised runs need the explicit
+build upgrade. All 494 application tests, type checking and the production build
+passed. Remaining execution algorithms and live qualification stay open.
+
 ## 4. Prove that automatic learning helps during real play
 
 - [x] Capture the live problem at a safe boundary, freeze proposal evidence, and

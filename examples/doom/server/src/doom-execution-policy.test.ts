@@ -44,3 +44,37 @@ test('interaction cadence retains released frames and the engine reach restricti
   assert.throws(() => doomExecutionPolicySchema.parse({ ...execution, damageBeforeReplan: 0 }));
   assert.throws(() => doomExecutionPolicySchema.parse({ ...execution, blockedAfterTicks: Infinity }));
 });
+
+test('navigation alignment is tunable independently from combat and preserves historical defaults', () => {
+  const historical = { ...defaultDoomExecutionPolicy };
+  assert.deepEqual(doomExecutionPolicySchema.parse(historical), historical, 'omission must not inject fields into historical hashes');
+  const execution = { ...historical, navigationAlignmentDegrees: 3, movementAlignmentDegrees: 10 };
+  const bearing = 5 * Math.PI / 180;
+  const enemy = { kind: 'enemy' as const, engineType: 1, health: 20, position: { x: 100 * Math.cos(bearing), y: 100 * Math.sin(bearing), z: 0 },
+    distance: 100, relativeBearing: 5, heading: 180, direction: { x: -1, y: 0 }, towardPlayerAlignment: 1 };
+  const combatState = { ...initial, enemies: [enemy] };
+  const combat = startPlan({ id: 'combat', label: 'combat', steps: [{ kind: 'face', label: 'aim', maxTicks: 140,
+    target: { ...enemy.position, kind: 'enemy', engineType: 1 } }] }, combatState, 140);
+  planInputs(combat, combatState, [], undefined, execution);
+  assert.equal(combat.status, 'complete', 'combat retains its motor aim tolerance');
+  for (const sign of [-1, 1]) for (const kind of ['face', 'move', 'use'] as const) {
+    const bearing = sign * (kind === 'move' ? 20 : 5), radians = bearing * Math.PI / 180;
+    const target = { kind: 'point' as const, x: 32 * Math.cos(radians), y: 32 * Math.sin(radians), z: 0 };
+    const plan: GamePlan = { id: kind, label: kind, steps: [{ kind, label: kind, maxTicks: 140, target }] };
+    const old = startPlan(plan, initial, 140), tuned = startPlan(plan, initial, 140);
+    const oldInputs = planInputs(old, initial, []);
+    assert.deepEqual(oldInputs, kind === 'face' ? [] : kind === 'use' ? ['use'] : ['forward', 'use']);
+    assert.deepEqual(planInputs(tuned, initial, [], undefined, execution), [sign > 0 ? 'left' : 'right']);
+    // Aligning within the configured threshold must let the step progress.
+    const aligned = { ...initial, angle: bearing - sign * 2 };
+    const inputs = planInputs(tuned, aligned, [], undefined, execution);
+    assert.deepEqual(inputs, kind === 'face' ? [] : kind === 'use' ? ['use'] : ['forward', 'use']);
+  }
+  for (const patch of [{ navigationAlignmentDegrees: 0 }, { navigationAlignmentDegrees: 21 },
+    { movementAlignmentDegrees: 0 }, { movementAlignmentDegrees: 91 }, { movementAlignmentDegrees: Infinity }]) {
+    assert.throws(() => doomExecutionPolicySchema.parse({ ...execution, ...patch }));
+  }
+  const outside = startPlan({ ...move, steps: [{ ...move.steps[0]!, kind: 'use' }] }, initial, 140);
+  assert.deepEqual(planInputs(outside, initial, [], undefined, execution), []);
+  assert.equal(outside.reason, 'interaction out of reach');
+});
