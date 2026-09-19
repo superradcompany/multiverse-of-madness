@@ -49,7 +49,7 @@ const session = new Session({ decide: async () => { throw new Error('Only the bo
 const store = new SessionStore(join(root, 'session.json'));
 session.setPersistence(value => store.save(value));
 session.setCheckpointAdapter(owner.checkpoints('background-main'));
-session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 let service: DoomLearningService | undefined;
 let verification: Record<string, unknown> | undefined;
 try {

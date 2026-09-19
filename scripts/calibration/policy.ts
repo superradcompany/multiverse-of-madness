@@ -39,7 +39,7 @@ for (const scenario of [0, 4]) {
   for (const step of setup) await source.step(step);
   const initial = await source.state(), deadline = initial.tick + 60 * 35;
   const session = new Session(new Jev(), { threshold: .75, horizon: 210, branches: 4, paceMs: 0, frameTicks: 1 });
-  session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+  session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
   await session.initialize(source);
   let stopping = false;
   session.on('change', () => {

@@ -163,13 +163,28 @@ Session execution reads the decision's immutable policy record, including after
 reconnect; it does not switch a running plan to a newer revision. Omitted settings
 preserve historical behavior and policy hashes. Proposal, input-dispatch, restart,
 rollback, malformed-value and policy-tampering tests cover the connection. These
-are controlled local tests, not real-VM or gameplay-quality qualification. The
-low-level aiming/collision motor and other fixed thresholds remain unfinished.
+are controlled local tests, not real-VM or gameplay-quality qualification.
 Validation: 399 application tests, type checking and the production build passed.
 All 113 policy records in the stopped live demo still verify with their original
 hashes. No demo process or VM was started. Older builds cannot consume policies
 containing the new execution field; use the explicit build-upgrade workflow before
 enabling it in a saved supervised session.
+
+Motor-policy progress (2026-09-19): the same revision path now supports observed
+stall duration, escape commitment/distance, clearance and velocity lookahead,
+preferred escape clearance and aim/turn assistance angles. Live and evaluation
+controllers consume the policy recorded for that world's decision. All session
+smoke/evaluation entrypoints forward it; omitted settings retain historical
+behavior. Tests verify branch-local recovery, policy publication/reconnect/
+rollback, changed engine inputs in a paired local-WASM evaluation, and retained
+blocked-shot/interaction checks. This is execution qualification, not evidence of
+stronger play. Engine rules, geometry and acceptance scoring remain host-owned;
+other fixed strategic thresholds and replaceable execution algorithms still need
+work. No VM or demo server was started.
+Validation passed: 406 application tests, type checking and the production build.
+The stopped demo's 113 historical policy records still verify unchanged. The new
+motor field requires the updated host; older hosts reject it instead of silently
+using different controls.
 
 ## 4. Prove that automatic learning helps during real play
 

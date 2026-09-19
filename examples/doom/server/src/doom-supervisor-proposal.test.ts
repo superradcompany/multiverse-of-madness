@@ -14,6 +14,7 @@ import { Session } from './session.ts';
 import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import { decodeDoomProposal, doomSupervisorEvidence, generateDoomProposal, type DoomProposalOptions, type DoomProposalRecord } from './doom-supervisor-proposal.ts';
 import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
+import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const guidance = { kind: 'guidance', reason: 'Reduce repeated unproductive movement', prompts: { plan: 'Use measured progress before repeating a waypoint.' } };
@@ -74,10 +75,12 @@ test('supervisor execution settings become a candidate artifact without changing
   try {
     const original = f.session.learningPolicy();
     const execution = { ...defaultDoomExecutionPolicy, blockedAfterTicks: 14, damageBeforeReplan: 4 };
-    f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution } });
+    const motor = { ...defaultDoomMotorPolicy, stalledTicks: 3 };
+    f.hooks.result = async () => ({ kind: 'guidance', reason: 'Reconsider movement earlier after observed blocked routes', policy: { ...original, execution, motor } });
     const result = await f.run();
     assert.equal(result.status, 'submitted');
     assert.deepEqual(result.candidate!.policy.execution, execution);
+    assert.deepEqual(result.candidate!.policy.motor, motor);
     assert.deepEqual(f.session.learningPolicy(), original);
     await f.reopen();
     assert.deepEqual((await f.run()).candidate!.policy.execution, execution);

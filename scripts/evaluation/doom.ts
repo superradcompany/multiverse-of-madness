@@ -78,7 +78,7 @@ const evaluate = (signal: AbortSignal) => compareRevisions(contract, baseline, c
       };
       session = new Session(model, profile);
       session.setRecorder(async world => { frames.push(structuredClone(world)); });
-      session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+      session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
       await session.initialize(source);
       const stop = () => { void session!.pause(); };
       signal.addEventListener('abort', stop, { once: true });

@@ -21,7 +21,7 @@ const branches: WorldRuntime[] = [];
 const branch = source.branch.bind(source);
 source.branch = async ids => { const children = await branch(ids); branches.push(...children); return children; };
 const session = new Session(maker, { threshold: .75, horizon: 70, branches: 2, paceMs: 0 });
-session.setControls(async (state, inputs, memory) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory));
+session.setControls(async (state, inputs, memory, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory, policy));
 try {
   const baseline = await source.state();
   await session.initialize(source);

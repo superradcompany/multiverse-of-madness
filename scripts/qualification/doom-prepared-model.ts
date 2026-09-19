@@ -64,7 +64,7 @@ const session = new Session(models.model(artifact), { threshold: .75, horizon: 3
   resolve: activation => { assert.equal(activation.epoch, 0); assert.deepEqual(activation.revision, artifact.revision); return artifact; }, model: current => { assert.equal(canonicalJson(current), canonicalJson(artifact)); return models.model(current); },
 });
 session.setPersistence(value => save('session.json', value));
-session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 await save('manifest.json', { build, artifact, image: pinned, resources, proposalDirectory, originalCandidate: proposal?.candidate, limitation: 'Component integration only. Source bytes preserved; host adapter rebound to this build, and trial duration/breadth/mode fixed for this diagnostic. No independent performance comparison or improvement claim.' });
 let result: Record<string, unknown>;
 try {

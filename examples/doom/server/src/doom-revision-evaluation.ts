@@ -95,7 +95,7 @@ export async function qualifyDoomRevision<Input>(request: QualificationRequest<D
         paceMs: 0, frameTicks: 7 }, binding, context);
       session.setPersistence(saved => options.persistSession(runId, saved));
       if (options.checkpoints) session.setCheckpointAdapter(options.checkpoints(runId, ledger, current));
-      session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+      session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
       try {
         const source = await options.create(runId, scenario, ledger, current);
         const initial = await source.state();

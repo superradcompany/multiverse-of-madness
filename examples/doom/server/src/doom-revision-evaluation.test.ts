@@ -12,11 +12,14 @@ import { EvaluationWorld } from '../../../../scripts/evaluation/doom-runtime.ts'
 import { Session } from './session.ts';
 import { decision } from '../test-support/fixture-runtime.ts';
 import type { WorldRuntime } from './runtime.ts';
+import type { Step } from '../../contracts/src/game.ts';
+import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'doom-evaluator-'));
   const worlds = new Map<string, EvaluationWorld[]>(), cleaned: string[] = [], packets: any[] = [], sessions: any[] = [];
   const budgets = new Map<string, BudgetSnapshot>();
+  const commands = new Map<string, Step[]>();
   const hooks: { decision?: () => Promise<void>; persist?: () => Promise<void>; cleanup?: () => Promise<void>; create?: () => Promise<void> } = {};
   const client = { systemOne: async (body: any) => {
     packets.push(structuredClone(body)); await hooks.decision?.();
@@ -42,10 +45,10 @@ async function fixture() {
     contract, context: { objective: 'Explore safely', skills: [{ id: '6b573c6a-254f-44c5-9699-a754d6bc09e6', name: 'User skill', instructions: 'Preserve health.', enabled: true }], overrides: { decisionTicks: 7 } },
     models,
     create: async (id, _scenario, ledger, signal) => {
-      const list: EvaluationWorld[] = []; worlds.set(id, list);
+      const list: EvaluationWorld[] = []; worlds.set(id, list); commands.set(id, []);
       const own = (world: EvaluationWorld): WorldRuntime => {
         list.push(world);
-        return { id: world.id, identity: world.identity, state: () => world.state(), frame: () => world.frame(), step: command => world.step(command), destroy: () => world.destroy(),
+        return { id: world.id, identity: world.identity, state: () => world.state(), frame: () => world.frame(), step: command => { commands.get(id)!.push(structuredClone(command)); return world.step(command); }, destroy: () => world.destroy(),
           branch: async ids => (await world.branch(ids)).map(own) };
       };
       const world = own(await EvaluationWorld.create(id, ledger, signal)); await hooks.create?.(); return world;
@@ -57,7 +60,7 @@ async function fixture() {
     persistRun: async () => {},
     persistComparison: async value => { comparison = value; },
   };
-  return { options, request, hooks, worlds, cleaned, packets, sessions, budgets, get comparison() { return comparison!; },
+  return { options, request, hooks, worlds, cleaned, packets, sessions, budgets, commands, get comparison() { return comparison!; },
     run: (signal = new AbortController().signal) => qualifyDoomRevision(request, options, signal),
     cleanup: () => rm(root, { recursive: true, force: true }) };
 }
@@ -79,6 +82,28 @@ test('paired revision evaluation applies sparse user context, measures actual ro
     assert.ok(f.sessions.every(saved => saved.version === 2 && saved.learning.overrides.decisionTicks === 7));
     for (const list of f.worlds.values()) for (const world of list) await assert.rejects(world.state(), /destroyed/);
     assert.equal(f.comparison.meanGain, 0, 'test accepts equal deterministic results; it is not improvement evidence');
+  } finally { await f.cleanup(); }
+});
+
+test('independent evaluation executes candidate motor settings while keeping the baseline unchanged', async () => {
+  const f = await fixture();
+  try {
+    const { revision: _, ...candidate } = f.request.candidate;
+    const motor = { ...defaultDoomMotorPolicy, minimumClearance: 64, lookaheadTicks: 12, stalledTicks: 2 };
+    f.request.candidate = doomLearningArtifact({ ...candidate, policy: { ...candidate.policy, motor } });
+    await f.run();
+    assert.ok(f.comparison.runs.every(run => run.status === 'complete'));
+    const baseline = f.comparison.runs.find(run => run.role === 'baseline')!, proposed = f.comparison.runs.find(run => run.role === 'candidate')!;
+    const before = f.commands.get(baseline.id)!, after = f.commands.get(proposed.id)!;
+    assert.ok(before.length > 0 && after.length > 0);
+    assert.notDeepEqual(after, before, 'the candidate must affect actual engine inputs, not only policy metadata');
+    assert.equal(f.request.baseline.policy.motor, undefined);
+    for (const saved of f.sessions) {
+      if (!saved.view.decision?.policyRevision) continue;
+      const policy = saved.policies.find((entry: any) => entry.revision.version === saved.view.decision.policyRevision.version).policy.values;
+      const isCandidate = saved.view.decision.learning.activation.revision.version === f.request.candidate.revision.version;
+      assert.deepEqual(policy.motor, isCandidate ? motor : undefined);
+    }
   } finally { await f.cleanup(); }
 });
 

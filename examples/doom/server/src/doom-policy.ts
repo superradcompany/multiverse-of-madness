@@ -3,8 +3,10 @@ import { contentRevision } from '@multiverse/gameplay-harness/node';
 import { z } from 'zod';
 import { doomOutcomeWeightsSchema } from './doom-outcome.ts';
 import { doomExecutionPolicySchema } from './doom-execution-policy.ts';
+import { doomMotorPolicySchema } from './doom-motor-policy.ts';
 
 const settings = z.strictObject({
+  motor: doomMotorPolicySchema.optional(),
   execution: doomExecutionPolicySchema.optional(),
   outcomeWeights: doomOutcomeWeightsSchema.optional(),
   forkThreshold: z.number().min(0).max(1),

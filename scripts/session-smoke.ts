@@ -11,7 +11,7 @@ import { Jev } from '../examples/doom/server/src/jev.ts';
 import { createWorld, reconnectWorld, recoverPendingWorld, destroyWorld } from '../examples/doom/server/src/runtime.ts';
 const store = new SessionStore('.cache/session-smoke.json');
 const session = new Session(new Jev(), { threshold: 0.75, horizon: 105, branches: 2, paceMs: 0 });
-session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 session.setCheckpointAdapter(checkpoints);
 const recordings = new Recordings('.cache/session-smoke-recordings');
 await recordings.open();

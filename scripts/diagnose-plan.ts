@@ -73,7 +73,7 @@ try {
     probabilities: Object.fromEntries(Object.keys(actions).map(id => [id, Number(id === 'advance')])) as Record<ActionId, number>,
     plans: { selected: plan.id, candidates: [{ ...plan, probability: 1 }] } }) }, { threshold: 0, branches: 2, horizon: 420, paceMs: 0 });
   session.setDecisionInterval(420);
-  session.setControls(async (state, inputs, memory) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory));
+  session.setControls(async (state, inputs, memory, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory, policy));
   await session.initialize(world);
   let paused: Promise<void> | undefined;
   session.setRecorder(async view => {

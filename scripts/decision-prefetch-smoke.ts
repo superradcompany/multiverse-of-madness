@@ -8,7 +8,7 @@ import { navigateDoomInputs } from '../examples/doom/server/src/doom-navigation.
 import { geometryFor } from '../examples/doom/server/src/doom-geometry.ts';
 
 const session = new Session(new Jev('game-aware'), { threshold: 0, horizon: 140, branches: 2, paceMs: 1000 / 35, frameTicks: 1 });
-session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 session.setDecisionInterval(70);
 const decisions: Array<{ tick: number; prefetched: boolean; waitMs: number; latencyMs: number }> = [];
 const freshness: unknown[] = [];

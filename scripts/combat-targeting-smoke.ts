@@ -34,7 +34,7 @@ try {
     return { ...decision, confidence: .5, priority: 'combat', model: 'mechanical-combat-fixture',
       plans: { selected: attack.id, candidates: [{ ...attack, probability: .5 }, { ...explore, probability: .5 }] } };
   } }, { threshold: .75, horizon: 210, branches: 2, paceMs: 0, frameTicks: 7 });
-  session.setControls(async (state, inputs, memory) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory));
+  session.setControls(async (state, inputs, memory, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), memory, policy));
   await session.initialize(world); session.setPlanningMode('plans'); session.setDecisionInterval(210);
   session.step(); await session.idle();
   const view = session.snapshot(); for (const item of view.worlds) ids.add(item.id);

@@ -35,7 +35,7 @@ const model: DecisionMaker = { decide: (...args) => training.run({ owner: 'train
     return { value: decision, usage: { modelCalls: 1, ...decision.usage } }; }, control.signal) };
 const session = new Session(model, { threshold: 0, horizon: 35, branches: 2, paceMs: 0 });
 session.setPlanningMode('actions'); session.useExperience(true);
-session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 const savedLive = await new SessionStore(resolve('.data/session.json')).load();
 if (savedLive) session.queueObjective(savedLive.view.pendingObjective ?? savedLive.view.objective);
 const store = new SessionStore(join(root, 'session.json')); session.setPersistence(value => store.save(value));

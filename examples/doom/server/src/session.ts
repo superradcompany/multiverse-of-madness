@@ -19,6 +19,7 @@ import { observePickups, type PickupMemory } from './doom-pickup-memory.ts';
 import { decisionStatistics } from './decision-context.ts';
 import { geometryFor } from './doom-geometry.ts';
 import { startPlan, stopPlan, planInputs, planView, type PlanExecution, type GamePlan } from './doom-plans.ts';
+import type { DoomControlPolicy } from './doom-motor-policy.ts';
 import { planNavigationMemory, type NavigationMemory } from './doom-navigation.ts';
 import { randomUUID } from 'node:crypto';
 import { advanceStats, initialStats, type TimelineStats } from './run-stats.ts';
@@ -300,8 +301,8 @@ export class Session extends EventEmitter {
   private set cleanup(entries: Array<{ id: string; identity: string }>) { this.lifecycle.cleanup = entries; }
   private recordingResetTo?: string;
   private pendingFork?: SessionCheckpoint['pendingFork'];
-  private control?: (state: GameState, inputs: Input[], navigation: NavigationMemory) => Promise<Input[]>;
-  setControls(control: (state: GameState, inputs: Input[], navigation: NavigationMemory) => Promise<Input[]>) { this.control = control; }
+  private control?: (state: GameState, inputs: Input[], navigation: NavigationMemory, policy?: DoomControlPolicy) => Promise<Input[]>;
+  setControls(control: NonNullable<Session['control']>) { this.control = control; }
   private record?: (world: WorldView, frame: Buffer) => Promise<void>;
   setRecorder(record: (world: WorldView, frame: Buffer) => Promise<void>) { this.record = record; }
   private retainRecording?: (id: string) => Promise<void>;
@@ -503,7 +504,7 @@ export class Session extends EventEmitter {
       if ((run.skillsRevision ?? 0) !== (this.view.skillsRevision ?? 0)) { stopPlan(run, 'replan', 'AI skills updated'); break; }
       if (this.view.pendingObjective || run.guide && run.guide !== this.view.objective) { stopPlan(run, 'replan', 'AI guide updated'); break; }
       const started = performance.now(), oldStep = run.step;
-      let inputs = planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.executionPolicy(world));
+      let inputs = planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.decisionPolicy(world)?.execution);
       world.navigation = planNavigationMemory(world.navigation, run, oldStep);
       world.view.plan = planView(run);
       if (run.status !== 'running') break;
@@ -522,7 +523,7 @@ export class Session extends EventEmitter {
     }
     // Record condition/limit transitions at the final frame as well as before
     // the next input. This prevents a completed trial showing an active plan.
-    if (!signal.aborted && run.status === 'running') planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.executionPolicy(world));
+    if (!signal.aborted && run.status === 'running') planInputs(run, world.view.state, world.history, await geometryFor(world.view.state, true, true), this.decisionPolicy(world)?.execution);
     world.view.plan = planView(run);
     if (beganRunning && run.status !== 'running') {
       const feedback = failedPlanFeedback(run, world.view.state);
@@ -537,7 +538,7 @@ export class Session extends EventEmitter {
   }
   private async controlledInputs(world: World, inputs: Input[]) {
     const previousEscape = world.navigation?.escape;
-    const result = await this.control!(world.view.state, inputs, world.navigation ??= {});
+    const result = await this.control!(world.view.state, inputs, world.navigation ??= {}, this.decisionPolicy(world));
     if (world.navigation.escape && world.navigation.escape !== previousEscape) {
       this.say(world.view.id, `Movement controller: obstacle detected, turning ${world.navigation.escape.turn} toward more clearance.`);
     }
@@ -562,7 +563,7 @@ export class Session extends EventEmitter {
     world.history = world.history.slice(-10);
     if (world.plan) {
       const previousStep = world.plan.step;
-      planInputs(world.plan, state, world.history, await geometryFor(state, true, true), this.executionPolicy(world));
+      planInputs(world.plan, state, world.history, await geometryFor(state, true, true), this.decisionPolicy(world)?.execution);
       world.navigation = planNavigationMemory(world.navigation, world.plan, previousStep);
       if (world.plan.step !== previousStep && world.plan.status === 'running') this.say(world.view.id, `${world.plan.plan.label}: step ${world.plan.step + 1}/${world.plan.plan.steps.length}, ${world.plan.plan.steps[world.plan.step]!.label}.`);
       world.view.plan = planView(world.plan);
@@ -782,17 +783,17 @@ export class Session extends EventEmitter {
     for (const world of this.worlds.values()) this.advanceGoal(world);
     this.say(this.mainId, `New objective: ${this.view.objective}`);
   }
-  private executionPolicy(world: World) {
+  private decisionPolicy(world: World) {
     const reference = world.view.policyRevision;
     if (!reference) return undefined;
     const policy = this.policies.get(reference.version);
     if (!policy) throw new Error('Plan execution requires its recorded policy revision');
-    return policy.policy.values.execution;
+    return policy.policy.values;
   }
   private controlPolicy(): DoomPolicy {
     const learned = this.revisions ? learningDoomPolicy(this.revisions.current().artifact, this.userOverrides).policy.values : undefined;
-    const outcomeWeights = learned?.outcomeWeights, execution = learned?.execution;
-    return { ...(outcomeWeights ? { outcomeWeights } : {}), ...(execution ? { execution } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
+    const outcomeWeights = learned?.outcomeWeights, execution = learned?.execution, motor = learned?.motor;
+    return { ...(outcomeWeights ? { outcomeWeights } : {}), ...(execution ? { execution } : {}), ...(motor ? { motor } : {}), forkThreshold: this.view.forkThreshold ?? this.options.threshold, breadth: this.view.effectiveFutures ?? this.view.maxFutures ?? this.options.branches,
       trialTicks: this.view.trialDurationTicks ?? this.options.horizon, decisionTicks: this.view.decisionIntervalTicks ?? 35,
       ...(this.view.decisionIntervalMode ? { decisionIntervalMode: this.view.decisionIntervalMode } : {}),
       planningMode: this.view.planningMode ?? 'plans', winnerDelaySeconds: this.view.winnerDelaySeconds ?? 0,

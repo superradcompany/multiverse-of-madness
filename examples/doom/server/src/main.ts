@@ -58,7 +58,7 @@ const vmSettings = new VmSettingsStore(dataPath('vm-settings.json'));
 await vmSettings.open();
 session.setVmSettings(vmSettings);
 session.setCheckpointAdapter(checkpoints);
-if (profile === 'game-aware') session.setControls(async (state, inputs, navigation) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation));
+if (profile === 'game-aware') session.setControls(async (state, inputs, navigation, policy) => navigateDoomInputs(state, inputs, await geometryFor(state, true, true), navigation, policy));
 const retention = z.object({
   megabytes: z.coerce.number().int().min(1).default(1024),
   hours: z.coerce.number().positive().default(24),

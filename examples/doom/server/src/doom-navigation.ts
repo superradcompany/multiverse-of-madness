@@ -2,6 +2,8 @@ import type { GameState, Input } from '../../contracts/src/game.ts';
 import { doomInputs } from './doom-controls.ts';
 import type { PlanExecution } from './doom-plans.ts';
 import type { DoomMap } from './doom-geometry.ts';
+import { defaultDoomMotorPolicy, type DoomControlPolicy } from './doom-motor-policy.ts';
+import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 
 // Per-world, serializable motor memory. Forks copy it; sibling futures never
 // share it. This is local collision recovery, not a route planner or Jev output.
@@ -19,7 +21,9 @@ export function planNavigationMemory(memory: NavigationMemory | undefined, run: 
 const difference = (a: number, b: number) => ((a - b + 540) % 360 + 360) % 360 - 180;
 const movement = (inputs: Input[]) => inputs.some(i => ['forward', 'backward', 'strafeLeft', 'strafeRight'].includes(i));
 
-export function navigateDoomInputs(state: GameState, requested: Input[], map: DoomMap, memory: NavigationMemory): Input[] {
+export function navigateDoomInputs(state: GameState, requested: Input[], map: DoomMap, memory: NavigationMemory, policy: DoomControlPolicy = {}): Input[] {
+  const motor = policy.motor ?? defaultDoomMotorPolicy;
+  const usePulseTicks = policy.execution?.usePulseTicks ?? defaultDoomExecutionPolicy.usePulseTicks;
   const previous = memory.previous;
   if (!previous || previous.episode !== state.episode || previous.map !== state.map || state.tick !== previous.tick + 1) {
     memory.stalled = 0;
@@ -36,23 +40,23 @@ export function navigateDoomInputs(state: GameState, requested: Input[], map: Do
   };
   if (!state.alive || state.phase !== 'level' || !movement(requested)) {
     memory.escape = undefined;
-    return finish(doomInputs(state, requested, map));
+    return finish(doomInputs(state, requested, map, true, motor));
   }
   const offset = requested.includes('forward') ? 0 : requested.includes('backward') ? 180 : requested.includes('strafeLeft') ? 90 : -90;
   const clearance = map.clearance(state, state.angle + offset);
-  const lookahead = Math.max(20, Math.hypot(state.velocity.x, state.velocity.y) * 4);
+  const lookahead = Math.max(motor.minimumClearance, Math.hypot(state.velocity.x, state.velocity.y) * motor.lookaheadTicks);
   let escape = memory.escape;
   const escapeClear = map.clearance(state, state.angle);
-  if (escape && Math.hypot(state.x - escape.x, state.y - escape.y) >= 64 && escapeClear > lookahead) {
+  if (escape && Math.hypot(state.x - escape.x, state.y - escape.y) >= motor.escapeDistance && escapeClear > lookahead) {
     memory.escape = escape = undefined;
   }
   // Give a door/use attempt a short opportunity, then recover from observed
   // failure even when static geometry cannot see the moving obstruction.
-  const stalled = (memory.stalled ?? 0) >= 7;
+  const stalled = (memory.stalled ?? 0) >= motor.stalledTicks;
   memory.blocked = (memory.blocked ?? []).filter(b => state.tick - b.tick < 140 && Math.hypot(state.x - b.x, state.y - b.y) < 64);
   if (stalled) memory.blocked.push({ heading: previous?.heading ?? state.angle + offset, x: state.x, y: state.y, tick: state.tick });
   if ((!escape && (clearance <= lookahead || stalled))
-      || (escape && (stalled || state.tick - escape.tick >= 70))) {
+      || (escape && (stalled || state.tick - escape.tick >= motor.escapeTicks))) {
     let directions = Array.from({ length: 24 }, (_, i) => {
       const delta = (i < 12 ? 1 : -1) * ((i % 12 + 1) * 15);
       const heading = state.angle + delta;
@@ -62,8 +66,8 @@ export function navigateDoomInputs(state: GameState, requested: Input[], map: Do
     if (untried.length) directions = untried;
     // Smallest viable turn first, with clearance breaking left/right ties.
     // If boxed in, face the most open direction instead of driving at the wall.
-    directions.sort((a, b) => Number(b.clearance >= 96) - Number(a.clearance >= 96)
-      || (a.clearance >= 96 && b.clearance >= 96 ? Math.abs(a.delta) - Math.abs(b.delta) || b.clearance - a.clearance : b.clearance - a.clearance));
+    directions.sort((a, b) => Number(b.clearance >= motor.routeClearance) - Number(a.clearance >= motor.routeClearance)
+      || (a.clearance >= motor.routeClearance && b.clearance >= motor.routeClearance ? Math.abs(a.delta) - Math.abs(b.delta) || b.clearance - a.clearance : b.clearance - a.clearance));
     const best = directions[0]!;
     memory.escape = escape = { heading: best.heading, turn: best.delta > 0 ? 'left' : 'right', x: state.x, y: state.y, tick: state.tick };
     memory.stalled = 0;
@@ -75,9 +79,9 @@ export function navigateDoomInputs(state: GameState, requested: Input[], map: Do
     if (Math.abs(angle) > 7) return finish([Math.abs(angle) > 170 ? escape.turn : angle > 0 ? 'left' : 'right']);
     const inputs: Input[] = ['forward'];
     // Pulse use so a held command can retry a door after arriving in range.
-    if (state.tick % 7 === 0) inputs.push('use');
-    return finish(doomInputs(state, inputs, map));
+    if (state.tick % usePulseTicks === 0) inputs.push('use');
+    return finish(doomInputs(state, inputs, map, true, motor));
   }
-  const inputs = doomInputs(state, requested, map);
-  return finish(inputs.filter(i => i !== 'use' || state.tick % 7 === 0));
+  const inputs = doomInputs(state, requested, map, true, motor);
+  return finish(inputs.filter(i => i !== 'use' || state.tick % usePulseTicks === 0));
 }

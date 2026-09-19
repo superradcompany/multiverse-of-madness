@@ -18,6 +18,9 @@ import { doomSurvivalProgress } from './doom-revision-evaluation.ts';
 import { Runtime, decision, initial } from '../test-support/fixture-runtime.ts';
 import type { GameState, Step } from '../../contracts/src/game.ts';
 import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
+import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
+import { navigateDoomInputs } from './doom-navigation.ts';
+import { DoomMap } from './doom-geometry.ts';
 
 const options = { threshold: .75, horizon: 7, branches: 2, paceMs: 0 };
 const fallback = { decide: async () => structuredClone(decision) };
@@ -270,6 +273,41 @@ test('supervised execution policy drives session inputs and retains historical p
     const changed = structuredClone(saved);
     (changed.policies!.find(policy => policy.revision.version === reference.version)!.policy.values.execution! as { usePulseTicks: number }).usePulseTicks = 3;
     await assert.rejects(f.reopen(changed), /does not match its revision/);
+  } finally { await f.cleanup(); }
+});
+
+test('a supervisor motor revision reaches forked controls and survives reconnect and rollback', async () => {
+  const commands = new Map<string, Step[]>();
+  class Stationary extends Runtime {
+    override async step(command: Step) { const history = commands.get(this.id) ?? []; history.push(structuredClone(command)); commands.set(this.id, history); return super.step(command); }
+    override async branch(ids: string[]) { const state = await this.state(); return ids.map(id => new Stationary(id, structuredClone(state))); }
+  }
+  const f = await fixture(false, new Stationary('root'));
+  try {
+    const motor = { ...defaultDoomMotorPolicy, stalledTicks: 2 };
+    const { revision: _, ...fields } = f.baseline;
+    const candidate = { ...fields, policy: { ...fields.policy, motor } };
+    await f.propose('motor', { ...candidate, revision: contentRevision('doom-learning-test', candidate) });
+    await f.controller.activate('motor');
+    const controlled = new Set<number>();
+    f.session.setControls(async (state, inputs, navigation, policy) => {
+      controlled.add(policy!.motor!.stalledTicks);
+      return navigateDoomInputs(state, inputs, new DoomMap([]), navigation, policy);
+    });
+    const move = { id: 'move', label: 'move', probability: 1, steps: [{ kind: 'move' as const, label: 'advance', target: { kind: 'point' as const, x: 128, y: 0, z: 0 }, maxTicks: 140 }] };
+    f.hooks.decision = { ...decision, confidence: 1, plans: { selected: move.id, candidates: [move] } };
+    await f.step();
+    assert.deepEqual([...controlled], [2]);
+    const history = commands.get(f.session.checkpoint().experiments[0]!.id)!;
+    assert.ok(history[0]!.inputs.includes('forward')); assert.ok(history[1]!.inputs.includes('forward'));
+    assert.deepEqual(history[2]!.inputs, ['left']);
+    await f.promote(); const reference = main(f.session).policyRevision!;
+    await f.save(); await f.reopen();
+    assert.deepEqual(f.session.learningPolicy().motor, motor);
+    assert.deepEqual(main(f.session).policyRevision, reference);
+    await f.controller.rollback(f.baseline.revision, 'Return to the prior motor preferences');
+    assert.equal(f.session.learningPolicy().motor, undefined);
+    assert.deepEqual(f.session.checkpoint().policies!.find(record => record.revision.version === reference.version)!.policy.values.motor, motor);
   } finally { await f.cleanup(); }
 });
 
