@@ -1,3 +1,5 @@
+import { doomTrainingCatalog } from './doom-curriculum.ts';
+import { trainingMenu, validateTrainingSelection } from '@multiverse/gameplay-harness';
 import { DoomLearningIncidents, decodeDoomIncidents } from './doom-learning-incidents.ts';
 import { activeSkills } from '../../contracts/src/skills.ts';
 import { decodeDoomLearningManifest as decodeManifest, type DoomLearningManifest as Manifest } from './doom-learning-manifest.ts';
@@ -297,10 +299,18 @@ export class DoomLearningService {
     }) : undefined;
     this.supervisor = await DoomSupervisor.open({ historical, models: this.models, store: this.store('supervisor.json', decodeDoomSupervisor), expectedBinding,
       initial: manifest.initial, rules: { contract: this.evaluator.version, capabilities: ['policy', 'prompts', 'skills', 'executor', 'model'], maxLifetimeMs: 24 * 3600000 },
-      qualify: (request, signal) => {
+      qualify: async (request, signal) => {
         const retained = this.incidents!.snapshot().records.some(record => record.proposalId === request.proposalId);
         const incident = retained ? this.incidents!.ready(request.proposalId) : undefined;
-        return this.evaluator!.qualify(request, signal, incident?.snapshot, incident ? sessionContinuation(incident.evidence) : undefined);
+        const record = await this.proposalStore(request.proposalId).load();
+        const catalog = doomTrainingCatalog(manifest.contract);
+        const training = record?.training;
+        if (training) {
+          if (!same(record.candidate, request.candidate) || !same(record.request.origin.context, request.context)
+            || !same(record.request.current, request.baseline) || !same(record.request.evidence.training, trainingMenu(catalog))) throw new Error('Doom practice proposal no longer matches this qualification');
+          validateTrainingSelection(catalog, training);
+        }
+        return this.evaluator!.qualify(request, signal, incident?.snapshot, incident ? sessionContinuation(incident.evidence) : undefined, training);
       } });
     await this.collectIncidents();
   }
@@ -336,7 +346,7 @@ export class DoomLearningService {
           : selectedProvider === 'codex' ? await CodexCliSupervisor.open<DoomPolicy, DoomProposalEvidence>({ record })
           : await ClaudeCodeSupervisor.open<DoomPolicy, DoomProposalEvidence>({ unrestricted: true, effort: 'medium', record });
         return { id, store, provider, supervisor: this.supervisor!, models: this.models!, executables: new ExecutableStore(join(this.options.directory, 'executables')),
-          unrestricted: true, testsSavedSituation: true, historicalExperiments: this.historicalExperiments, ledger: this.generation!, limits: this.manifest!.proposalLimits, capture: () => {
+          unrestricted: true, trainingCatalog: doomTrainingCatalog(this.manifest!.contract), testsSavedSituation: true, historicalExperiments: this.historicalExperiments, ledger: this.generation!, limits: this.manifest!.proposalLimits, capture: () => {
             if (!same(context, this.game().supervisorContext())) throw new Error('User guidance changed while saving the learning situation');
             return structuredClone(saved);
           },

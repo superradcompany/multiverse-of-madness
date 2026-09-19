@@ -11,12 +11,14 @@ import { Session } from './session.ts';
 import { SessionStore } from './persistence.ts';
 import { Runtime, decision } from '../test-support/fixture-runtime.ts';
 import type { GameState } from '../../contracts/src/game.ts';
+import type { DoomProposalEvidence } from './doom-supervisor-proposal.ts';
 
-async function fixture() {
+async function fixture(practice = false) {
   const directory = await mkdtemp(join(tmpdir(), 'doom-learning-service-'));
   const buildData = { node: process.version, files: {} };
   const worlds = new Map<string, Runtime>(), points = new Map<string, GameState>();
   let providerCalls = 0, modelCalls = 0;
+  const requests: DoomProposalEvidence[] = [];
   const options: DoomLearningServiceOptions = { backgroundLearning: false, bootstrapPlanner: false,
     directory, profile: 'game-aware', build: { ...buildData, revision: contentRevision('fixture-build', buildData) },
     image: 'docker.io/library/node@sha256:' + 'a'.repeat(64),
@@ -29,7 +31,10 @@ async function fixture() {
     } } as unknown as Pick<TypeSafeClient, 'systemOne'>,
     proposalProvider: async record => ({ version: { id: 'fixture-provider', version: '1' }, propose: async request => {
       providerCalls++;
-      const response = { draft: { kind: 'guidance', reason: 'Measure before repeating movement', prompts: { action: 'Use measured progress.' } },
+      requests.push(structuredClone(request.evidence));
+      const menu = request.evidence.training;
+      const response = { draft: { kind: 'guidance', reason: 'Measure before repeating movement', prompts: { action: 'Use measured progress.' },
+        ...(practice && menu ? { training: { catalog: menu.catalog, scenarioIds: [menu.scenarios[0]!.id], reason: 'Check the opening before the saved incident' } } : {}) },
         receipt: { id: request.id, provider: { id: 'fixture-provider', version: '1' }, startedAt: Date.now(), elapsedMs: 1,
           inputBytes: 100, outputBytes: 100, requestedModel: 'fixture', servingModels: ['fixture'], status: 'complete' as const,
           usage: { inputTokens: 12, outputTokens: 4, costMicros: 123 } } };
@@ -51,7 +56,7 @@ async function fixture() {
   session.setCheckpointAdapter({ capture: options.runtime!.capture, restore: options.runtime!.restore, remove: async ref => { points.delete(ref); } });
   session.setPersistence(saved => store.save(saved)); await store.save(session.checkpoint());
   let service = await DoomLearningService.open(options); await service.attach(session);
-  return { directory, options, source, worlds, points, store, get session() { return session; }, get service() { return service; },
+  return { directory, options, source, worlds, points, store, requests, get session() { return session; }, get service() { return service; },
     get providerCalls() { return providerCalls; }, get modelCalls() { return modelCalls; },
     reopen: async () => {
       await service.close(); const saved = (await store.load())!;
@@ -89,6 +94,33 @@ test('checkpoint preparation is visible before generation and finishes after pau
     assert.equal(done.jobs.find(job => job.id === id)?.status, 'complete');
     assert.equal(done.jobs.find(job => job.id === id)?.preparingCheckpoint, undefined);
     assert.equal(f.providerCalls, 1); assert.equal(f.session.snapshot().running, false);
+  } finally { await f.cleanup(); }
+});
+
+test('service runs optional practice independently and feeds its measured results into the next supervisor review after restart', async () => {
+  const f = await fixture(true);
+  try {
+    await f.service.enable(); const initialState = await f.source.state(), id = randomUUID();
+    await f.service.start({ kind: 'propose', id, proposalKind: 'guidance' }); await settled(f.service);
+    const before = f.session.checkpoint(); assert.deepEqual(await f.source.state(), initialState);
+    const menu = f.requests[0]!.training!;
+    assert.equal(menu.maximumSelection, 2); assert.equal(menu.scenarios.length, 3);
+    await f.service.start({ kind: 'evaluate', id: randomUUID(), proposalId: id });
+    const view = await settled(f.service);
+    assert.equal(view.jobs[0]!.status, 'complete', JSON.stringify(view.jobs));
+    assert.equal(view.proposals[0]!.result?.accepted, false); assert.equal(view.active?.epoch, 0);
+    assert.deepEqual(f.session.checkpoint(), before); assert.equal(f.source.destroyed, false);
+    const preview = await f.service.evaluationView(id);
+    assert.equal(preview.runs.filter(run => run.purpose === 'practice').length, 2);
+    assert.equal(preview.total, 10); assert.equal(preview.finished, 4);
+    const replay = preview.runs.find(run => run.purpose === 'practice' && run.replay)!;
+    assert.equal((await f.service.evaluationReplayFrames(id, replay.id, 0, 1)).length, 1);
+    assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    const modelCalls = f.modelCalls; await f.reopen(); assert.equal(f.modelCalls, modelCalls);
+    await f.service.start({ kind: 'propose', id: randomUUID(), proposalKind: 'guidance' }); await settled(f.service);
+    const previous = f.requests.at(-1)!.previousExperiments as Array<{ outcome: { practice: { purpose: string; results: unknown[] } } }>;
+    assert.equal(previous[0]!.outcome.practice.purpose, 'practice'); assert.equal(previous[0]!.outcome.practice.results.length, 1);
+    assert.equal(f.modelCalls, modelCalls); assert.equal(f.providerCalls, 2);
   } finally { await f.cleanup(); }
 });
 

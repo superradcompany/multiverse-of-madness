@@ -45,6 +45,19 @@ Credentials stay in the server environment, outside browser bundles and game VMs
 - The brain button opens background-learning activity and comparisons. Normal
   operation does not require manual proposal, test or activation commands.
 
+The supervisor may optionally choose up to two public opening exercises to test a
+specific uncertainty. The comparison viewer labels these **Practice** and retains
+their replays. Practice results inform a later review; they never approve a change.
+The saved incident and private regression tests still decide activation. These
+opening exercises do not reproduce every later room or demonstrate stronger play.
+
+Practice uses the existing background evaluator process with separate run journals
+and allowances. Omitting it adds no practice runs. New proposal records use format
+2; format-1 records remain readable unchanged, while older hosts refuse format 2.
+Use the explicit gameplay-build upgrade workflow for a saved supervised session.
+The integration has controlled local test coverage; live supervisor/VM curriculum
+qualification remains pending.
+
 The main world can remain paused while futures explore. A card saying
 **choosing next approach** is waiting for Jev's next decision; it is not the winner
 scoring operation. Automatic promotion publishes the winner before cleaning up

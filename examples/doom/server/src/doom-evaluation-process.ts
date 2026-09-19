@@ -1,3 +1,4 @@
+import type { TrainingSelection } from '@multiverse/gameplay-harness';
 import type { SessionContinuation } from './session.ts';
 import type { DoomIncidentCheckpoint } from './doom-evaluation-vms.ts';
 import { fork, type ChildProcess } from 'node:child_process';
@@ -11,7 +12,7 @@ import type { DoomLearningManifest } from './doom-learning-manifest.ts';
 export type EvaluationProcessCommand = { id: number; kind: 'recover' } | {
   id: number; kind: 'qualify'; request: QualificationRequest<DoomPolicy>;
   context: { revision: VersionRef; value: DoomEvaluationContext };
-  incident?: DoomIncidentCheckpoint; continuation?: SessionContinuation;
+  incident?: DoomIncidentCheckpoint; continuation?: SessionContinuation; training?: TrainingSelection;
 };
 export type EvaluationProcessReply = { id: number; result?: Qualification; error?: string };
 
@@ -27,11 +28,11 @@ export class DoomEvaluationProcess {
     this.version = contentRevision('doom-evaluation-contract', manifest.contract);
   }
   async recover(): Promise<void> { await this.send({ id: ++this.sequence, kind: 'recover' }); }
-  async qualify(request: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation): Promise<Qualification> {
+  async qualify(request: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation, training?: TrainingSelection): Promise<Qualification> {
     signal.throwIfAborted();
     const id = ++this.sequence;
     const cancel = () => { void this.ready?.then(() => { if (this.child?.connected) this.child.send({ kind: 'cancel', id }); }).catch(() => {}); };
-    const result = this.send({ id, kind: 'qualify', request, context: this.context(), ...(incident ? { incident, continuation } : {}) });
+    const result = this.send({ id, kind: 'qualify', request, context: this.context(), ...(training ? { training } : {}), ...(incident ? { incident, continuation } : {}) });
     signal.addEventListener('abort', cancel, { once: true });
     try { return (await result)!; }
     finally { signal.removeEventListener('abort', cancel); }

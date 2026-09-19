@@ -37,6 +37,8 @@ test('evaluation worker exchanges requests, rejects stale context without creati
     await assert.rejects(worker.qualify(request, new AbortController().signal), /context changed/);
     await assert.rejects(worker.qualify(request, AbortSignal.abort(new Error('cancelled'))), /cancelled/);
     const current = { ...request, context: version };
+    await assert.rejects(worker.qualify(current, new AbortController().signal, undefined, undefined,
+      { catalog: { id: 'wrong', version: 'stale' }, scenarioIds: ['opening'], reason: 'Check IPC practice validation' }), /Invalid or stale/);
     await assert.rejects(worker.qualify(current, new AbortController().signal,
       { reference: 'invalid', identity: 'fixture', state: { id: 'doom-game-state', version: 'sha256:' + 'a'.repeat(64) } }), /reference|Invalid|pattern/);
     await worker.recover();

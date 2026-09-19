@@ -1,3 +1,5 @@
+import { doomTrainingContract, type DoomTrainingFeedback } from './doom-curriculum.ts';
+import type { EvaluationComparison, TrainingSelection } from '@multiverse/gameplay-harness';
 import type { SessionContinuation } from './session.ts';
 import { withDoomEvaluationAllowance, type DoomEvaluationContract } from './doom-evaluation-allowance.ts';
 import { withDoomIncident, requireDoomIncidentImprovement, doomIncidentRejection } from './doom-incident-evaluation.ts';
@@ -44,17 +46,19 @@ export class DoomVmEvaluations {
     if (this.active || this.recovering) throw new Error('VM evaluator is already working');
     this.recovering = true;
     try {
-      const entries = await readdir(this.options.directory, { withFileTypes: true }).catch(error => {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error;
-      });
       const directories: string[] = [];
-      for (const entry of entries) {
-        if (!z.string().uuid().safeParse(entry.name).success) continue;
-        if (!entry.isDirectory()) throw new Error('Evaluation job path must be a directory, not a link or file');
-        const store = this.resourceStore(entry.name);
-        // A crash before resource admission can leave only the immutable request manifest.
-        if (await store.load()) await DoomEvaluationVms.open(store, this.options.runtime);
-        directories.push(join(this.options.directory, entry.name));
+      for (const root of [this.options.directory, join(this.options.directory, 'practice')]) {
+        const entries = await readdir(root, { withFileTypes: true }).catch(error => {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error;
+        });
+        for (const entry of entries) {
+          if (!z.string().uuid().safeParse(entry.name).success) continue;
+          if (!entry.isDirectory()) throw new Error('Evaluation job path must be a directory, not a link or file');
+          const store = this.resourceStore(entry.name, root);
+          // A crash before resource admission can leave only the immutable request manifest.
+          if (await store.load()) await DoomEvaluationVms.open(store, this.options.runtime);
+          directories.push(join(root, entry.name));
+        }
       }
       // Finish resource cleanup first; a malformed recording must not prevent
       // cleanup of later jobs. Footage recovery never recreates a game world.
@@ -62,8 +66,9 @@ export class DoomVmEvaluations {
     } finally { this.recovering = false; }
   }
 
-  async qualify(input: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation) {
+  async qualify(input: QualificationRequest<DoomPolicy>, signal: AbortSignal, incident?: DoomIncidentCheckpoint, continuation?: SessionContinuation, training?: TrainingSelection) {
     if (this.active || this.recovering) throw new Error('VM evaluator is already working');
+    training = training ? structuredClone(training) : undefined;
     const request = structuredClone(input); z.string().uuid().parse(request.proposalId);
     if (canonicalJson(request.contract) !== canonicalJson(this.version)) throw new Error('VM evaluation contract changed');
     const context = structuredClone(this.options.context());
@@ -71,9 +76,11 @@ export class DoomVmEvaluations {
     if (continuation && !incident) throw new Error('Incident knowledge requires a captured game state');
     const scenarios = incident ? withDoomIncident(this.contract, incident, continuation) : this.contract;
     const contract = withDoomEvaluationAllowance(scenarios, request.baseline, request.candidate, context.value);
+    const practiceContract = training ? doomTrainingContract(this.contract, training) : undefined;
     const evaluationRequest = { ...request, contract: contentRevision('doom-evaluation-contract', contract) };
     signal.throwIfAborted(); this.active = true;
     let owner: DoomEvaluationVms | undefined;
+    let trainingEvidence: { reference: VersionRef; feedback: DoomTrainingFeedback } | undefined;
     const directory = join(this.options.directory, request.proposalId);
     const write = (file: string, value: unknown) => this.store(join(directory, file)).save(value);
     const runPath = (id: string) => 'runs/' + contentRevision('doom-evaluation-run', id).version.slice(7);
@@ -86,6 +93,23 @@ export class DoomVmEvaluations {
         : incident
         ? { version: 2, request, evaluationRequest, context, templateContract: this.contract, contract, createdAt: Date.now() }
         : { version: 1, request, context, contract, createdAt: Date.now() });
+      if (practiceContract && training) {
+        const selection = structuredClone(training);
+        await write('training.json', { version: 1, purpose: 'practice', selection, contract: practiceContract });
+        const practice = new DoomVmEvaluations({ ...this.options, directory: join(this.options.directory, 'practice'), contract: practiceContract });
+        const measured = await practice.qualify({ ...request, contract: practice.version }, signal);
+        const comparison = measured.evidence as EvaluationComparison<DoomVmScenario, DoomEvaluationEvidence>;
+        const feedback: DoomTrainingFeedback = { purpose: 'practice', reason: selection.reason, results: practiceContract.scenarios.map(scenario => {
+          const runs = comparison.runs.filter(run => run.scenarioId === scenario.id);
+          const gain = comparison.gains.find(pair => pair.scenarioId === scenario.id)?.gain;
+          return { scenarioId: scenario.id, complete: runs.length === 2 && runs.every(run => run.status === 'complete'), ...(gain !== undefined ? { gain } : {}) };
+        }) };
+        const report = { version: 1, purpose: 'practice', selection, comparison };
+        await write('training-result.json', report);
+        trainingEvidence = { reference: contentRevision('doom-training-result', report), feedback };
+        signal.throwIfAborted();
+        if (canonicalJson(this.options.context().revision) !== canonicalJson(request.context)) throw new Error('Evaluation user context changed during practice');
+      }
       owner = await DoomEvaluationVms.open(this.resourceStore(request.proposalId), this.options.runtime);
       const resources = owner;
       const qualification = await qualifyDoomRevision(evaluationRequest, {
@@ -107,13 +131,13 @@ export class DoomVmEvaluations {
         },
       }, signal);
       // The supervisor pins the host's template; evidence pins the exact instantiated cases as well.
-      return { ...qualification, contract: request.contract };
+      return { ...qualification, contract: request.contract, ...(trainingEvidence ? { evidence: { ...(qualification.evidence as Record<string, unknown>), training: trainingEvidence } } : {}) };
     } finally {
       try { await owner?.recover(); }
       finally { this.active = false; }
     }
   }
-  private resourceStore(id: string) { return new JsonFileStore(join(this.options.directory, id, 'resources.json'), decodeDoomEvaluationVms); }
+  private resourceStore(id: string, directory = this.options.directory) { return new JsonFileStore(join(directory, id, 'resources.json'), decodeDoomEvaluationVms); }
   private store(path: string) {
     let store = this.stores.get(path);
     if (!store) { store = new JsonFileStore(path, value => value); this.stores.set(path, store); } return store;

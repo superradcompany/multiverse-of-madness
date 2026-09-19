@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { contentRevision } from '@multiverse/gameplay-harness/node';
 import type { EvaluationRun } from '@multiverse/gameplay-harness';
-import type { LearningEvaluationView, EvaluationRunPreview } from '../../contracts/src/learning-evaluation.ts';
+import type { LearningEvaluationView, EvaluationRunPreview, EvaluationReplayFrame } from '../../contracts/src/learning-evaluation.ts';
 import type { SessionCheckpoint } from './session.ts';
 import type { DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
 import { DoomEvaluationReplay } from './doom-evaluation-replay.ts';
@@ -16,7 +16,9 @@ export class LearningEvaluationReader {
   private readonly cache = new Map<string, { stamp: number; size: number; value: unknown }>();
   private readonly frames = new Map<string, Buffer>();
   private readonly replays = new Map<string, { manifest: unknown; replay: DoomEvaluationReplay }>();
-  constructor(private readonly directory: string) {}
+  private practice?: LearningEvaluationReader;
+  constructor(private readonly directory: string, private readonly includePractice = true) {}
+  private practiceReader() { return this.practice ??= new LearningEvaluationReader(join(this.directory, 'practice'), false); }
 
   async view(proposalId: string, active: boolean): Promise<LearningEvaluationView> {
     z.string().uuid().parse(proposalId);
@@ -67,17 +69,23 @@ export class LearningEvaluationReader {
       }
       return view;
     })));
-    return { proposalId, active, scenarios, runs, total: scenarios.length * 2,
-      finished: runs.filter(run => ['complete', 'error', 'cancelled', 'timeout'].includes(run.status)).length };
+    const practice = this.includePractice ? await this.practiceReader().view(proposalId, active) : undefined;
+    const practiceRuns = practice?.runs.map(run => ({ ...run, scenarioId: 'practice/' + run.scenarioId, purpose: 'practice' as const })) ?? [];
+    const allRuns = [...practiceRuns, ...runs];
+    return { proposalId, active, scenarios: [...(practice?.scenarios.map(id => 'practice/' + id) ?? []), ...scenarios], runs: allRuns,
+      total: allRuns.length, finished: allRuns.filter(run => ['complete', 'error', 'cancelled', 'timeout'].includes(run.status)).length };
   }
 
-  async replayFrames(proposalId: string, runId: string, start: number, count: number) {
+  async replayFrames(proposalId: string, runId: string, start: number, count: number): Promise<EvaluationReplayFrame[]> {
     // Derive the permitted run IDs from the evaluation contract, never from a path supplied by the caller.
     z.string().uuid().parse(proposalId);
     const manifest = await this.read<{ contract: { id: string; scenarios: Array<{ id: string }> } }>(join(this.directory, proposalId, 'manifest.json'));
     const known = manifest?.value.contract.scenarios.some(scenario => ['baseline', 'candidate'].some(role =>
       contentRevision('doom-evaluation-run', `${manifest.value.contract.id}/${scenario.id}/${role}`).version.slice(7) === runId));
-    if (!known) throw new Error('Evaluation replay is unavailable');
+    if (!known) {
+      if (this.includePractice) return this.practiceReader().replayFrames(proposalId, runId, start, count);
+      throw new Error('Evaluation replay is unavailable');
+    }
     const directory = join(this.directory, proposalId, 'runs', runId);
     const saved = await this.read<DoomEvaluationRecordingManifest>(join(directory, 'recording.json'));
     if (!saved) throw new Error('Evaluation replay is unavailable');
@@ -87,7 +95,7 @@ export class LearningEvaluationReader {
       this.replays.set(directory, entry);
     }
     this.replays.delete(directory); this.replays.set(directory, entry);
-    // At most four 16 MiB decoded-segment caches, independent of historical run count.
+    // At most four 16 MiB decoded-segment caches per reader; practice has its own reader.
     while (this.replays.size > 4) this.replays.delete(this.replays.keys().next().value!);
     return entry.replay.frames(start, count);
   }
@@ -96,7 +104,7 @@ export class LearningEvaluationReader {
     if (!/^[a-f0-9]{64}$/.test(digest)) return;
     const value = this.frames.get(digest);
     if (value) { this.frames.delete(digest); this.frames.set(digest, value); }
-    return value;
+    return value ?? this.practice?.frame(digest);
   }
   private retainFrame(encoded: string): string {
     const bytes = Buffer.from(encoded, 'base64'), id = createHash('sha256').update(bytes).digest('hex');

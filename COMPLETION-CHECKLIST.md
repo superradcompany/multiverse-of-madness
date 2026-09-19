@@ -173,6 +173,24 @@ Read-only compatibility validation accepted all nine retained historical chess
 reviews (two format 1 and seven format 4) without rewriting them. No saved demo
 session, model or VM was started for this work.
 
+Doom curriculum integration (2026-09-19): automatic proposals now offer optional
+selection of up to two public opening exercises through the portable catalog.
+Practice runs in the existing background evaluation worker, with separate resources,
+allowances, recordings and replay. Its compact measured feedback reaches later
+reviews; approval still depends only on the saved incident and original private
+regression tests. Exact acceptance setup sequences are excluded from the public
+menu. This is not a claim of statistically independent positions: the exercises
+share the opening map and do not cover arbitrary later rooms. The current host reads
+new proposal format 2 alongside unchanged format-1 records; older hosts refuse
+new records.
+Controlled tests cover service restart, later feedback, selection validation,
+cancellation, unchanged acceptance and visible/replayable practice. No saved demo,
+real model or VM was started. Broader observed-state practice, live qualification
+and measured usefulness remain open, so the curriculum checkbox stays unchecked.
+Read-only validation decoded 63 retained historical Doom proposal records without
+changing their contents. Application tests, the focused abandoned-practice recovery
+check, type checking, production build and 135 core tests passed.
+
 Doom execution-policy progress: supervisor proposals can now supply four bounded
 plan settings: damage before replanning, distance for new-threat interruption,
 minimum movement age before blocked-route detection, and interaction pulse period.

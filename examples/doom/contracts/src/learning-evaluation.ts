@@ -10,7 +10,7 @@ export interface EvaluationWorldPreview {
   health: number; kills: number; frame?: string;
 }
 export interface EvaluationRunPreview {
-  id: string; scenarioId: string; role: 'baseline' | 'candidate';
+  id: string; scenarioId: string; role: 'baseline' | 'candidate'; purpose?: 'practice';
   status: 'waiting' | 'running' | 'complete' | 'error' | 'cancelled' | 'timeout' | 'interrupted' | 'not-run';
   updatedAt?: number; stage?: string; error?: string; ending?: string;
   stats?: { health: number; armor: number; kills: number; items: number; cells: number; seconds: number; damage: number };

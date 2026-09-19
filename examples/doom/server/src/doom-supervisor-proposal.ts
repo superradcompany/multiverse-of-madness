@@ -1,3 +1,6 @@
+import type { DoomVmScenario } from './doom-vm-evaluations.ts';
+import type { DoomTrainingFeedback } from './doom-curriculum.ts';
+import { trainingMenu, validateTrainingSelection, type TrainingCatalog, type TrainingMenu, type TrainingSelection } from '@multiverse/gameplay-harness';
 import { doomIncidentFeedback } from './doom-incident-feedback.ts';
 import { previousPlanFeedback } from './plan-feedback.ts';
 import { z } from 'zod';
@@ -51,7 +54,7 @@ function supervisorTiming(saved: SessionCheckpoint) {
     planningMode: saved.view.planningMode ?? 'actions', ticksPerSecond: 35,
     scope: 'Current settings for the next judgment, not historical execution. Trial ticks are the comparison horizon; action ticks are the configured decision interval. Plans can stop early and decisions inside a future are bounded by its remaining time.' };
 }
-export interface DoomProposalEvidence { testsSavedSituation?: boolean; requestedKind?: LearningProposalKind; preparationExample?: unknown; preparationExampleHistory?: ReturnType<typeof supervisorExampleHistory>['sampling']; preparationOutputSchema?: unknown; observations: Record<string, unknown>; currentSource?: ExecutableSource; previousExperiments?: unknown[] }
+export interface DoomProposalEvidence { training?: TrainingMenu; testsSavedSituation?: boolean; requestedKind?: LearningProposalKind; preparationExample?: unknown; preparationExampleHistory?: ReturnType<typeof supervisorExampleHistory>['sampling']; preparationOutputSchema?: unknown; observations: Record<string, unknown>; currentSource?: ExecutableSource; previousExperiments?: unknown[] }
 /** Report host decisions and aggregate outcomes, never private acceptance states or scenario identities. */
 export function doomPreviousExperiments(journal: RevisionJournal<DoomPolicy>, context: VersionRef): Record<string, unknown>[] {
   return journal.proposals.filter(proposal => proposal.qualification || proposal.error).slice(-4).map(proposal => {
@@ -65,11 +68,15 @@ export function doomPreviousExperiments(journal: RevisionJournal<DoomPolicy>, co
       outcome: proposal.qualification ? { accepted: proposal.qualification.accepted,
         reason: proposal.qualification.accepted ? 'Passed the host acceptance contract.' : 'Did not pass the host acceptance contract.',
         execution: doomEvaluationFeedback(proposal.qualification.evidence), savedSituation: doomIncidentFeedback(proposal.qualification.evidence),
+        practice: (proposal.qualification.evidence as { training?: { feedback: DoomTrainingFeedback } })?.training?.feedback,
         meanGain, comparedCases: gains.length || undefined, regressedCases: gains.length ? gains.filter(value => value < 0).length : undefined }
         : { error: 'Evaluation did not produce a qualification; inspect the local diagnostic record.' } }));
   });
 }
+const trainingSchema = z.strictObject({ catalog: z.strictObject({ id: z.string().min(1), version: z.string().min(1) }),
+  scenarioIds: z.array(z.string().min(1)).min(1).max(2), reason: z.string().min(1).max(1000) });
 const edits = {
+  training: trainingSchema.optional(),
   reason: z.string().trim().min(1).max(4000), policy: doomLearningPolicySchema.optional(),
   prompts: z.record(z.string().min(1).max(80), z.string().max(4096)).optional(),
   skills: z.array(z.strictObject({ id: z.string().min(1).max(80), instructions: z.string().min(1).max(4096) })).max(32).optional(),
@@ -83,6 +90,7 @@ const proposalSchema = (usesJev: boolean) => z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('planner'), ...jevEdits, source: sourceSchema, model: z.string().regex(/^jev-[a-zA-Z0-9._-]{1,120}$/).optional() }),
 ]);
 const sharedTaskParts = [
+  'When evidence.training offers a public practice menu, optionally return training:{catalog,scenarioIds,reason} using its exact catalog identity and at most maximumSelection listed IDs. Choose only exercises that test a specific uncertainty; omit training when these opening exercises do not address the observed problem. Practice uses separate resources before independent acceptance. Its results inform a later review, not edits to this candidate or model weights. Practice cannot approve a change, weaken acceptance, modify the user objective, or supply new inputs/seeds/budgets. Previous experiments may contain practice feedback; incomplete runs and a small sample do not demonstrate improved play.',
   'Propose one learning-system improvement grounded in the supplied observed Doom play. Keep the user objective and overrides intact. Return kind=guidance with complete replacement policy/prompts/skills fields, kind=executor for an isolated ranker, or kind=planner for isolated candidate-generation/context/retrieval code followed by Jev. Source changes contain complete TypeScript source plus optional replacement settings. Omitted fields stay unchanged. Do not change the host adapter, evaluator, budget, observations, engine input vocabulary or game state. Do not claim improvement before independent evaluation.',
   'Optional policy.outcomeWeights changes search preferences separately for survival/exploration/combat priorities. Each set contains health, kills, novelCells, items, secrets, ammo and exit weights within the provided schema. Omitting the field retains historical scoring. These weights only select gameplay futures; they cannot alter the independent acceptance metric or make dead futures eligible. Propose them only with a specific observed tradeoff to test.',
   'Optional policy.execution configures plan interruption and interaction cadence: damageBeforeReplan (health lost since plan start, default 8), nearbyThreatDistance (world units for newly observed threats, default 160), blockedAfterTicks (minimum movement-step age before a stationary-history check can replan, default 35), and usePulseTicks (press/release period, default 7). All four fields are required when supplied. The clock is 35 ticks/second. Values are bounded by the schema and pinned to each decision. Use observed execution failures to justify changes; these settings cannot alter collision rules, actor identity, legal inputs or independent acceptance metrics. Omission uses the historical defaults.',
@@ -103,13 +111,13 @@ const task = taskParts.join('\n');
 const guidanceTask = sharedTaskParts.join('\n') + '\nPrefer a concise reusable strategic guide. Jev owns frequent execution. Change only what the observed failure requires; do not add unrelated instructions.';
 
 export interface DoomProposalRecord {
-  version: 1; binding: VersionRef; id: string; createdAt: number; expiresAt: number; limits: SupervisorLimits; unrestricted?: boolean;
+  version: 1 | 2; training?: TrainingSelection; binding: VersionRef; id: string; createdAt: number; expiresAt: number; limits: SupervisorLimits; unrestricted?: boolean;
   request: SupervisorRequest<DoomPolicy, DoomProposalEvidence>; requestRevision: VersionRef;
   status: 'requested' | 'responded' | 'ready' | 'submitted' | 'failed' | 'cancelled' | 'interrupted';
   output?: unknown; receipt?: SupervisorReceipt; candidate?: LearningRevision<DoomPolicy>; reason?: string; error?: string;
 }
 const ref = z.strictObject({ id: z.string().min(1), version: z.string().min(1) });
-const recordSchema = z.strictObject({ version: z.literal(1), binding: ref, id: z.string().uuid(), createdAt: z.number().int().nonnegative(),
+const recordSchema = z.strictObject({ version: z.union([z.literal(1), z.literal(2)]), training: trainingSchema.optional(), binding: ref, id: z.string().uuid(), createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(), limits: z.unknown(), unrestricted: z.boolean().optional(), request: z.unknown(), requestRevision: ref,
   status: z.enum(['requested', 'responded', 'ready', 'submitted', 'failed', 'cancelled', 'interrupted']),
   output: z.unknown().optional(), receipt: z.unknown().optional(), candidate: z.unknown().optional(), reason: z.string().optional(), error: z.string().optional() });
@@ -117,10 +125,19 @@ export function decodeDoomProposal(value: unknown): DoomProposalRecord {
   const parsed = recordSchema.parse(value) as DoomProposalRecord;
   validateSupervisorLimits(parsed.limits);
   if (!same(parsed.requestRevision, contentRevision('doom-supervisor-request', parsed.request)) || parsed.request.id !== parsed.id) throw new Error('Doom proposal request content mismatch');
+  if (parsed.version === 1 && (parsed.training || parsed.request.evidence.training)) throw new Error('Legacy Doom proposal cannot contain training');
+  if (parsed.candidate && (parsed.output as { training?: unknown })?.training && !parsed.training) throw new Error('Missing recorded Doom practice selection');
+  if (parsed.training) {
+    const menu = parsed.request.evidence.training;
+    if (!menu || !same(parsed.training, (parsed.output as { training?: unknown })?.training)) throw new Error('Doom practice selection does not match the recorded proposal');
+    validateTrainingSelection({ format: 1, revision: menu.catalog, maximumSelection: menu.maximumSelection,
+      scenarios: menu.scenarios.map(scenario => ({ ...scenario, seed: 'host', input: null })) }, parsed.training);
+  }
   return parsed;
 }
 export interface DoomProposalOptions {
   unrestricted?: boolean;
+  trainingCatalog?: TrainingCatalog<DoomVmScenario>;
   /** Host has retained the supplied situation for a mandatory paired comparison. */
   testsSavedSituation?: boolean;
   historicalExperiments?: Record<string, unknown>[];
@@ -144,6 +161,7 @@ export function generateDoomProposal(options: DoomProposalOptions, signal: Abort
 async function generate(options: DoomProposalOptions, signal: AbortSignal): Promise<DoomProposalRecord> {
   z.string().uuid().parse(options.id); validateSupervisorLimits(options.limits);
   const kind = doomProposalKindSchema.optional().parse(options.kind);
+  const trainingCatalog = options.trainingCatalog ? structuredClone(options.trainingCatalog) : undefined;
   const limits = structuredClone(options.limits), binding = options.supervisor.binding.identity;
   const previous = await options.store.load();
   if (previous) {
@@ -169,7 +187,7 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
     objective: saved.view.pendingObjective ?? saved.view.objective, capabilities: journal.rules.capabilities, contract: journal.rules.contract,
     // Zod adds non-enumerable runtime metadata; only its JSON schema is sent or hashed.
     task: kind ? (kind === 'guidance' ? guidanceTask : task) + '\nThe user requested kind=' + kind + '. Return that kind only; do not substitute another type of change.' : task,
-    evidence: { ...(options.testsSavedSituation ? { testsSavedSituation: true } : {}), ...(kind ? { requestedKind: kind } : {}), observations: doomSupervisorEvidence(saved, kind === 'guidance'), previousExperiments: [...(options.historicalExperiments ?? []), ...doomPreviousExperiments(journal, origin.context)].slice(-4) },
+    evidence: { ...(trainingCatalog ? { training: trainingMenu(trainingCatalog) } : {}), ...(options.testsSavedSituation ? { testsSavedSituation: true } : {}), ...(kind ? { requestedKind: kind } : {}), observations: doomSupervisorEvidence(saved, kind === 'guidance'), previousExperiments: [...(options.historicalExperiments ?? []), ...doomPreviousExperiments(journal, origin.context)].slice(-4) },
     outputSchema: JSON.parse(JSON.stringify(z.toJSONSchema(kind ? draftSchema.options.find(schema => schema.shape.kind.value === kind)! : draftSchema))) };
   if (!kind || kind === 'planner') {
     const main = saved.worlds.find(world => world.view.id === saved.view.mainId)!;
@@ -185,7 +203,7 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
   }
   if (kind !== 'guidance' && current.executor.id === 'learning-executor') request.evidence.currentSource = (await options.executables.get(current.executor)).source;
   canonicalJson(request);
-  const record: DoomProposalRecord = { version: 1, binding, id: options.id, createdAt, expiresAt: createdAt + journal.rules.maxLifetimeMs,
+  const record: DoomProposalRecord = { version: trainingCatalog ? 2 : 1, binding, id: options.id, createdAt, expiresAt: createdAt + journal.rules.maxLifetimeMs,
     limits, ...(options.unrestricted ? { unrestricted: true } : {}), request, requestRevision: contentRevision('doom-supervisor-request', request), status: 'requested' };
   await options.store.save(record);
   try {
@@ -211,6 +229,10 @@ async function generate(options: DoomProposalOptions, signal: AbortSignal): Prom
     if (!outcome.output || outcome.output.receipt.status !== 'complete') throw new Error('Supervisor did not return a completed proposal');
     const draft = draftSchema.parse(outcome.output.draft);
     if (kind && draft.kind !== kind) throw new Error('Supervisor returned ' + draft.kind + ' instead of requested ' + kind + ' proposal');
+    if (draft.training) {
+      if (!trainingCatalog) throw new Error('No practice catalog was offered');
+      record.training = validateTrainingSelection(trainingCatalog, draft.training);
+    }
     const { revision: _previous, ...fields } = current;
     if (draft.policy) fields.policy = draft.policy;
     if (draft.prompts) fields.prompts = draft.prompts;

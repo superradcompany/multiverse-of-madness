@@ -6,17 +6,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TypeSafeClient } from '@typesafe-ai/sdk';
 import type { EvaluationContract } from '@multiverse/gameplay-harness';
-import { contentRevision, ExecutableStore } from '@multiverse/gameplay-harness/node';
+import { contentRevision, ExecutableStore, JsonFileStore } from '@multiverse/gameplay-harness/node';
 import { DoomVmEvaluations, type DoomVmScenario } from './doom-vm-evaluations.ts';
 import { DoomLearningModels, doomLearningArtifact } from './doom-learning-models.ts';
 import { doomSurvivalProgress } from './doom-revision-evaluation.ts';
 import { Session, sessionContinuation } from './session.ts';
 import { Runtime, decision } from '../test-support/fixture-runtime.ts';
-import { doomIncidentCheckpoint, type DoomEvaluationVmPorts } from './doom-evaluation-vms.ts';
+import { doomIncidentCheckpoint, DoomEvaluationVms, decodeDoomEvaluationVms, type DoomEvaluationVmPorts } from './doom-evaluation-vms.ts';
 import type { GameState } from '../../contracts/src/game.ts';
 import { Recordings } from './recordings.ts';
 import { openDoomEvaluationRecording, type DoomEvaluationRecordingManifest } from './doom-evaluation-recording.ts';
 import { LearningEvaluationReader } from './learning-evaluation-view.ts';
+import { doomTrainingCatalog, doomTrainingContract } from './doom-curriculum.ts';
+import { BudgetLedger, trainingMenu } from '@multiverse/gameplay-harness';
 
 async function recordingFor(root: string, proposal: string, runId: string) {
   const directory = join(root, proposal, 'runs', contentRevision('doom-evaluation-run', runId).version.slice(7));
@@ -208,5 +210,93 @@ test('a retained live checkpoint adds a paired case, persists both contract iden
     assert.match(result.reason, /remaining test games were skipped/);
     assert.deepEqual(f.points.get(ref), state, 'borrowed checkpoint survives evaluator cleanup');
     assert.equal(f.points.size, 1);
+  } finally { await f.cleanup(); }
+});
+
+test('selected practice is recorded and replayable but cannot qualify a rejected acceptance comparison', async () => {
+  const f = await fixture();
+  try {
+    const catalog = doomTrainingCatalog(f.options.contract);
+    const selection = { catalog: catalog.revision, scenarioIds: ['opening'], reason: 'Check opening priorities' };
+    const before = structuredClone(f.options.contract);
+    const pending = f.evaluator.qualify(f.request, new AbortController().signal, undefined, undefined, selection);
+    selection.scenarioIds[0] = 'mutated-after-dispatch';
+    const result = await pending;
+    selection.scenarioIds[0] = 'opening';
+    assert.equal(result.accepted, false); assert.match(result.reason, /mean improvement/);
+    assert.deepEqual(f.options.contract, before); assert.deepEqual(result.contract, f.request.contract);
+    const root = join(f.root, f.request.proposalId);
+    const practice = JSON.parse(await readFile(join(root, 'training-result.json'), 'utf8'));
+    assert.equal(practice.purpose, 'practice'); assert.equal(practice.comparison.accepted, true);
+    assert.ok(practice.comparison.runs.every((run: any) => run.status === 'complete'));
+    const acceptance = JSON.parse(await readFile(join(root, 'comparison.json'), 'utf8'));
+    assert.deepEqual(acceptance.contract, before); assert.deepEqual(acceptance.gains.map((pair: any) => pair.scenarioId), ['first']);
+    const evidence = result.evidence as any;
+    assert.deepEqual(evidence.training.reference, contentRevision('doom-training-result', practice));
+    assert.equal(evidence.training.feedback.purpose, 'practice'); assert.equal(evidence.training.feedback.accepted, undefined);
+    assert.deepEqual(evidence.training.feedback.results, [{ scenarioId: 'opening', complete: true, gain: 0 }]);
+    const reader = new LearningEvaluationReader(f.root), view = await reader.view(f.request.proposalId, false);
+    assert.equal(view.total, 4); assert.equal(view.finished, 4);
+    const run = view.runs.find(run => run.purpose === 'practice')!;
+    assert.equal(run.scenarioId, 'practice/opening'); assert.ok(run.replay?.frames);
+    assert.equal((await reader.replayFrames(f.request.proposalId, run.id, 0, 1)).length, 1);
+    assert.ok(reader.frame(run.worlds[0]!.frame!));
+    assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    const calls = f.calls;
+    const reopened = new DoomVmEvaluations(f.options); await reopened.recover();
+    await assert.rejects(reopened.qualify(f.request, new AbortController().signal, undefined, undefined, selection), /already admitted/);
+    assert.equal(f.calls, calls);
+  } finally { await f.cleanup(); }
+});
+
+test('practice rejects stale selections before dispatch and excludes acceptance setups from its public menu', async () => {
+  const f = await fixture();
+  try {
+    const acceptance = { ...f.options.contract, scenarios: [{ id: 'private', seed: 'secret', input: { setup: [] } }] };
+    const catalog = doomTrainingCatalog(acceptance), menu = trainingMenu(catalog);
+    assert.equal(menu.scenarios.some(scenario => scenario.id === 'opening'), false);
+    assert.equal(JSON.stringify(menu).includes('secret'), false); assert.equal(JSON.stringify(menu).includes('setup'), false);
+    const selection = { catalog: catalog.revision, scenarioIds: ['left-facing'], reason: 'Check orientation' };
+    assert.equal(doomTrainingContract(acceptance, selection).scenarios[0]!.id, 'left-facing');
+    await assert.rejects(f.evaluator.qualify(f.request, new AbortController().signal, undefined, undefined, selection), /Invalid or stale/);
+    const current = doomTrainingCatalog(f.options.contract);
+    await assert.rejects(f.evaluator.qualify(f.request, new AbortController().signal, undefined, undefined,
+      { ...selection, catalog: current.revision, scenarioIds: ['private'] }), /Invalid or stale/);
+    assert.equal(f.calls, 0); assert.equal(f.creations, 0);
+  } finally { await f.cleanup(); }
+});
+
+test('cancelled or stale practice never starts acceptance, and restart cannot repeat its paid work', async () => {
+  for (const mode of ['cancel', 'stale'] as const) {
+    const f = await fixture(), control = new AbortController();
+    try {
+      const selection = { catalog: doomTrainingCatalog(f.options.contract).revision, scenarioIds: ['opening'], reason: 'Check initial choices' };
+      f.hooks.decide = async () => { if (mode === 'cancel') control.abort(new Error('Stop practice')); else f.changeContext(); };
+      await assert.rejects(f.evaluator.qualify(f.request, control.signal, undefined, undefined, selection), mode === 'cancel' ? /Stop practice/ : /context changed during practice/);
+      await assert.rejects(readFile(join(f.root, f.request.proposalId, 'resources.json')), { code: 'ENOENT' });
+      await assert.rejects(readFile(join(f.root, f.request.proposalId, 'comparison.json')), { code: 'ENOENT' });
+      const calls = f.calls; await new DoomVmEvaluations(f.options).recover();
+      assert.equal(f.calls, calls); assert.equal(f.points.size, 0); assert.ok([...f.worlds.values()].every(world => world.destroyed));
+      const view = await new LearningEvaluationReader(f.root).view(f.request.proposalId, false);
+      assert.ok(view.runs.some(run => run.purpose === 'practice' && run.status !== 'not-run'));
+      assert.ok(view.runs.filter(run => !run.purpose).every(run => run.status === 'not-run'));
+    } finally { await f.cleanup(); }
+  }
+});
+
+test('startup finds and releases abandoned practice resources without restarting their games', async () => {
+  const f = await fixture();
+  try {
+    const store = new JsonFileStore(join(f.root, 'practice', f.request.proposalId, 'resources.json'), decodeDoomEvaluationVms);
+    const owner = await DoomEvaluationVms.open(store, f.options.runtime);
+    const ledger = new BudgetLedger({ simulationUnit: 'doom-ticks', limits: { simulation: 100 } });
+    const world = await owner.create('abandoned-practice', ledger, new AbortController().signal);
+    await owner.checkpoints('abandoned-practice').capture(world, `mom-checkpoint-${randomUUID()}:recovery`);
+    assert.equal(f.points.size, 1); assert.equal(f.calls, 0);
+    const creations = f.creations;
+    await new DoomVmEvaluations(f.options).recover();
+    assert.equal(f.creations, creations); assert.equal(f.calls, 0); assert.equal(f.points.size, 0);
+    assert.ok([...f.worlds.values()].every(world => world.destroyed));
+    assert.ok((await store.load())!.runs.every(run => run.closed && run.worlds.every(world => world.released)));
   } finally { await f.cleanup(); }
 });

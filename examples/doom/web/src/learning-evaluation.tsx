@@ -22,14 +22,15 @@ export function LearningEvaluation({ proposalId }: { proposalId: string }) {
   const current = data?.runs.find(run => run.status === 'running');
   const lastStarted = data?.runs.filter(run => run.status !== 'waiting' && run.status !== 'not-run').at(-1);
   const scenario = selected ?? current?.scenarioId ?? lastStarted?.scenarioId ?? data?.scenarios[0];
+  const practice = scenario?.startsWith('practice/');
   return <section className="evaluation-preview" aria-label="Gameplay comparison">
     <div className="evaluation-toolbar"><strong>{data?.total ? `${data.finished} / ${data.total} runs finished` : data && !data.active ? 'No evaluation games were started' : 'Preparing test games…'}</strong>
       {data && data.scenarios.length > 0 && <select aria-label="Comparison scenario" value={selected ?? 'follow'} onChange={event => setSelected(event.target.value === 'follow' ? undefined : event.target.value)}>
-        <option value="follow">Follow comparison</option>{data.scenarios.map((id, index) => <option key={id} value={id}>{id === 'saved-stuck-position' ? 'Saved stuck position' : `Start ${index + 1}`}</option>)}
+        <option value="follow">Follow comparison</option>{data.scenarios.map(id => <option key={id} value={id}>{id.startsWith('practice/') ? `Practice: ${id.slice(9).replaceAll('-', ' ')}` : id === 'saved-stuck-position' ? 'Saved stuck position' : `Acceptance start ${data.scenarios.filter(item => !item.startsWith('practice/')).indexOf(id) + 1}`}</option>)}
       </select>}
     </div>
     {data?.total ? <><progress aria-label="Evaluation run progress" value={data.finished} max={data.total} />
-      <p className="evaluation-caption">{scenario === 'saved-stuck-position' ? 'Testing from the saved stuck position' : `Start ${data.scenarios.indexOf(scenario!) + 1} of ${data.scenarios.length}`} · runs execute one at a time under matching test limits.</p>
+      <p className="evaluation-caption">{practice ? 'Supervisor-selected practice. Separate acceptance tests decide whether to apply the change' : scenario === 'saved-stuck-position' ? 'Testing from the saved stuck position' : 'Independent acceptance test'} · runs execute one at a time under matching test limits.</p>
       <div className="evaluation-pair">{data.runs.filter(run => run.scenarioId === scenario).map(run => <RunPreview key={run.id} proposalId={proposalId} run={run} />)}</div>
       <small className="evaluation-caption">Active runs show saved previews. Replay a finished run to watch its selected route from the test's starting position. Your main session stays separate.</small>
     </> : null}

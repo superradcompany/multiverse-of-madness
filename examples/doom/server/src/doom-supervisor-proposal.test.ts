@@ -16,6 +16,8 @@ import { decodeDoomProposal, doomSupervisorEvidence, generateDoomProposal, type 
 import { defaultDoomExecutionPolicy } from './doom-execution-policy.ts';
 import { defaultDoomMotorPolicy } from './doom-motor-policy.ts';
 import { doomPreparationInput } from './doom-preparation-input.ts';
+import { contentRevision } from '@multiverse/gameplay-harness/node';
+import { trainingMenu } from '@multiverse/gameplay-harness';
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
 const guidance = { kind: 'guidance', reason: 'Reduce repeated unproductive movement', prompts: { plan: 'Use measured progress before repeating a waypoint.' } };
@@ -69,6 +71,43 @@ test('generation freezes observed evidence, accounts actual usage and submits wi
     assert.deepEqual((await f.run()).candidate, result.candidate); assert.equal(f.calls, 1);
     assert.equal(JSON.stringify(result.request).includes('acceptance: '), false);
   } finally { await f.cleanup(); }
+});
+
+test('supervisor selects only offered practice, without changing the candidate artifact or publishing private inputs', async () => {
+  const baseline = await fixture(), selected = await fixture();
+  try {
+    const ordinary = await baseline.run();
+    const fields = { format: 1 as const, maximumSelection: 1, scenarios: [{ id: 'opening', label: 'Opening', description: 'Check initial priorities', seed: 'private-seed', input: { setup: [], minimumSelectedTicks: 210 } }] };
+    const catalog = { ...fields, revision: contentRevision('test-training', fields) };
+    selected.options.trainingCatalog = catalog;
+    const training = { catalog: catalog.revision, scenarioIds: ['opening'], reason: ' Test the proposed guidance ' };
+    selected.hooks.result = async () => ({ ...guidance, training });
+    const result = await selected.run();
+    assert.equal(result.version, 2); assert.equal(result.status, 'submitted');
+    assert.deepEqual(result.training, training); assert.deepEqual(result.request.evidence.training, trainingMenu(catalog));
+    assert.equal(JSON.stringify(result.request).includes('private-seed'), false);
+    assert.deepEqual(result.candidate, ordinary.candidate, 'practice selection is outside the learning artifact');
+    assert.deepEqual(decodeDoomProposal(result), result);
+    assert.throws(() => decodeDoomProposal({ ...result, version: 1 }), /Legacy/);
+    assert.throws(() => decodeDoomProposal({ ...result, training: undefined }), /Missing recorded/);
+    assert.throws(() => decodeDoomProposal({ ...result, training: { ...training, scenarioIds: ['private'] } }), /does not match/);
+    await selected.reopen(); assert.deepEqual((await selected.run()).candidate, result.candidate); assert.equal(selected.calls, 1);
+  } finally { await baseline.cleanup(); await selected.cleanup(); }
+});
+
+test('an unoffered or stale supervisor practice selection fails before candidate publication', async () => {
+  for (const offered of [false, true]) {
+    const f = await fixture();
+    try {
+      if (offered) f.options.trainingCatalog = { format: 1, revision: { id: 'catalog', version: 'current' }, maximumSelection: 1,
+        scenarios: [{ id: 'opening', label: 'Opening', description: 'Initial choices', seed: 'host', input: { setup: [] } }] };
+      f.hooks.result = async () => ({ ...guidance, training: { catalog: { id: 'catalog', version: 'stale' }, scenarioIds: ['opening'], reason: 'Test choices' } });
+      const result = await f.run();
+      assert.equal(result.status, 'failed'); assert.match(result.error!, offered ? /Invalid or stale/ : /No practice catalog/);
+      assert.equal(f.supervisor.snapshot().journal.proposals.length, 0); assert.equal(f.calls, 1);
+      assert.equal(decodeDoomProposal(result).status, 'failed');
+    } finally { await f.cleanup(); }
+  }
 });
 
 test('planner examples omit exact repeated states while preserving observation evidence and valid runtime input', async () => {
