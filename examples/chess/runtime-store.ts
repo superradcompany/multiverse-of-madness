@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { DEFAULT_POSITION } from 'chess.js';
 import { SerialQueue, canonicalJson, type RuntimeProvider, type ExecutionCheckpoints, type WorldRuntime } from '@multiverse/gameplay-harness';
 import { JsonFileStore } from '@multiverse/gameplay-harness/node';
-import { ChessWorld, type ChessState, type ChessSave } from './runtime.ts';
+import { ChessWorld, chessWorldCapabilities, type ChessState, type ChessSave } from './runtime.ts';
 
 interface StoredWorld { version: 1; id: string; identity: string; state: ChessState }
 /** Host-owned execution accounting. Wraps the actual input and durable acknowledgment, including forked worlds. */
@@ -12,7 +12,7 @@ export interface ChessStepAccounting { run(worldId: string, apply: () => Promise
 /** A durable board-game runtime, independent of the UI and host process lifetime. */
 export class ChessRuntimeStore implements RuntimeProvider<ChessState, { san: string }, string> {
   readonly version = { id: 'chess-file-runtime', version: '1' };
-  readonly capabilities = { observations: 'structured', exactFork: true, checkpoint: true, restore: true, detached: true, render: true } as const;
+  readonly capabilities = Object.freeze({ ...chessWorldCapabilities, checkpoint: true, restore: true, detached: true } as const);
   constructor(private readonly root: string, private readonly initialFen = DEFAULT_POSITION, private readonly accounting?: ChessStepAccounting) {}
   executeStep(worldId: string, apply: () => Promise<ChessState>) { return this.accounting ? this.accounting.run(worldId, apply) : apply(); }
   async create(id: string, signal: AbortSignal): Promise<StoredChessWorld> { signal.throwIfAborted(); return this.createFrom(id, { initialFen: this.initialFen, moves: [] }); }

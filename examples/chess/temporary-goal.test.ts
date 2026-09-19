@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ChessWorld } from './runtime.ts';
+import { ChessWorld, chessWorldCapabilities } from './runtime.ts';
 import { ChessAdapter } from './adapter.ts';
 import { chessGoalFrame, advanceChessTemporaryGoal, proposeChessTemporaryGoal, type ChessGoalContext, type ChessGoalProposal } from './temporary-goal.ts';
 import { prepareChessRequest, type ChessDecisionRequest } from './preparation.ts';
@@ -45,7 +45,7 @@ test('only controlled-side Jev decisions receive temporary guidance and the user
 });
 test('preparation cannot replace the host goal scope before a decision', async () => {
   const f = await fixture();
-  await assert.rejects(decideChess({ version: { id: 'fixture', version: '1' }, prepare: async request => ({ ...request, temporaryGoal: { ...f.context, player: 'b' } }), decide: async () => assert.fail('Do not ask Jev') }, f.request, new AbortController().signal), /goal scope/);
+  await assert.rejects(decideChess({ version: { id: 'fixture', version: '1' }, prepare: async request => ({ ...request, temporaryGoal: { ...f.context, player: 'b' } }), decide: async () => assert.fail('Do not ask Jev') }, f.request, new AbortController().signal, chessWorldCapabilities), /goal scope/);
 });
 
 test('opponent preparation cannot drop the controlled-side pursuit to renew it next turn', async () => {
@@ -53,5 +53,5 @@ test('opponent preparation cannot drop the controlled-side pursuit to renew it n
   const request = { ...prepared, state, candidates: await new ChessAdapter().candidates(state), temporaryGoal: {
     ...prepared.temporaryGoal!, frame: { ...f.context.frame, clock: { unit: 'chess-plies', value: state.ply } },
   } };
-  await assert.rejects(decideChess({ version: { id: 'fixture', version: '1' }, prepare: async input => ({ ...input, temporaryGoal: { frame: input.temporaryGoal!.frame, player: 'w' } }), decide: async () => assert.fail('Do not ask Jev') }, request, new AbortController().signal), /Opponent preparation/);
+  await assert.rejects(decideChess({ version: { id: 'fixture', version: '1' }, prepare: async input => ({ ...input, temporaryGoal: { frame: input.temporaryGoal!.frame, player: 'w' } }), decide: async () => assert.fail('Do not ask Jev') }, request, new AbortController().signal, chessWorldCapabilities), /Opponent preparation/);
 });

@@ -3,6 +3,9 @@ import { Chess, DEFAULT_POSITION } from 'chess.js';
 import type { WorldRuntime } from '@multiverse/gameplay-harness';
 
 export interface ChessSave { initialFen: string; moves: string[] }
+/** In-memory histories can fork and render, but do not supply durable checkpoints or detached reconnection. */
+export const chessWorldCapabilities = Object.freeze({ observations: 'structured', exactFork: true,
+  checkpoint: false, restore: false, detached: false, render: true } as const);
 export interface ChessState extends ChessSave {
   fen: string;
   turn: 'w' | 'b';

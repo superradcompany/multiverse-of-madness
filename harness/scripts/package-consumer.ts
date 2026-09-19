@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { routeDecision, runTrials, createScopedGoal, advanceScopedGoal, decodeScopedGoal, type Trial, type ScopedGoalRules } from '@multiverse/gameplay-harness';
+import { routeDecision, runTrials, createScopedGoal, advanceScopedGoal, decodeScopedGoal, requirePlanCapabilities, UnsupportedGameCapabilities, type Trial, type ScopedGoalRules, type GameCapabilities } from '@multiverse/gameplay-harness';
 import { contentRevision, JsonFileStore } from '@multiverse/gameplay-harness/node';
 
 // Package-boundary fixture, not a game, model call, or VM qualification.
+const capabilities: GameCapabilities = { observations: 'visual', exactFork: false, checkpoint: false, restore: false, detached: false, render: true };
+requirePlanCapabilities({ id: 'ordinary-move', requires: ['render'] }, capabilities);
+assert.throws(() => requirePlanCapabilities({ id: 'rewind', requires: ['restore'] }, capabilities), UnsupportedGameCapabilities);
 const routed = routeDecision([{ id: 'a', probability: .6 }, { id: 'b', probability: .4 }],
   { threshold: .75, breadth: 2 }, { confidence: .6, manual: false, stalled: false, retries: 0 });
 assert.equal(routed.mode, 'uncertain');

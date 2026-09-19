@@ -78,6 +78,33 @@ abilities. A recording cannot resume execution. A screenshot is not a checkpoint
 Omit unsupported optional methods and set their capability flags to false.
 The host must reject a plan whose `requires` cannot be met before dispatch.
 
+Use the exported preflight checks before paid preparation/decision work and again
+before dispatching a selected or restored plan:
+
+```ts
+requirePlanCapabilities(plan, provider.capabilities);
+```
+
+For a workflow operation, check its requirements before publishing intent or
+allocating worlds, for example:
+
+```ts
+requireGameCapabilities(provider.capabilities, ['exactFork'], 'Compare futures');
+```
+
+Import both functions from `@multiverse/gameplay-harness`. Unsupported declarations
+throw `UnsupportedGameCapabilities` with `operation` and `missing` fields. Malformed
+declarations, duplicate requirements and unknown feature names are rejected;
+requirements are never silently removed or downgraded to replay. Capture, restore,
+rendering, detached ownership and exact forks are independent flags.
+
+These checks validate declarations, not actual engine fidelity or method presence.
+The host still supplies truthful capabilities and matching runtime methods. They
+are explicit helpers, not an automatic interception layer around arbitrary ports.
+Chess's shared live/evaluation decision boundary uses them, and its session checks
+again before journaling input. In-memory chess evaluation declares no persistent
+checkpoints or detached reconnection; the file-backed provider supplies those.
+
 Exact forks must preserve all outcome-relevant state, including randomness,
 inventory, timers and hidden engine state. A deterministic board engine may
 reconstruct from verified full history; that is not a VM snapshot. A visual-only

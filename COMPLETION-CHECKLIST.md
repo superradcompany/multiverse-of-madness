@@ -430,6 +430,19 @@ and implemented behavior from unqualified gameplay claims. Design documents poin
 to the current guides. This closes documentation delivery only; it does not qualify
 current runtime behavior, complete shared session management or prove game quality.
 
+Capability-boundary audit (2026-09-19): the core already refuses absent exact-fork
+ports, but plan requirements previously were descriptive metadata in chess.
+The public package now supplies capability/plan preflight checks with explicit
+unsupported-feature errors. Chess validates before preparation/model work and
+before input publication, including saved opening plans; in-memory and durable
+runtime capabilities are distinguished. Controlled tests cover rejection without
+model/input dispatch and capabilities changing during preparation or judgment.
+This is declaration enforcement, not proof of engine fidelity or a completed
+cross-game orchestration audit. Hosts still own runtime-method checks and exact
+state qualification; no live VM or model call was made for this change.
+Validation passed: 438 application tests, 133 core tests, type checking, production
+build and a clean packed-package install/typecheck/execution outside the checkout.
+
 Completion requires the unchecked items above, not a fixed number of passing
 unit tests. Release, publication and commits still require explicit authorization.
 

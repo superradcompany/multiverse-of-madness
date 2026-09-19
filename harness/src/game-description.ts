@@ -1,5 +1,6 @@
 import type { GameCapabilities, VersionRef } from './contracts.ts';
 import { canonicalJson } from './policy.ts';
+import { validateGameCapabilities } from './capabilities.ts';
 
 /** Host-authored field semantics. Paths are JSON pointers relative to the described object. */
 export interface GameFieldDescription {
@@ -58,9 +59,8 @@ export function validateGameDescription(value: unknown, expected?: { adapter: Ve
   unique(list(outcomes.metrics, 1, 128).map(item => {
     const metric = object(item, ['id', 'meaning', 'direction']); text(metric.id); text(metric.meaning); oneOf(metric.direction, ['higher', 'lower', 'diagnostic']); return metric.id;
   }));
-  const capabilities = object(root.capabilities, ['observations', 'exactFork', 'checkpoint', 'restore', 'detached', 'render']);
-  oneOf(capabilities.observations, ['structured', 'visual', 'mixed']);
-  for (const key of ['exactFork', 'checkpoint', 'restore', 'detached', 'render']) if (typeof capabilities[key] !== 'boolean') throw new Error(`Invalid capability ${key}`);
+  validateGameCapabilities(root.capabilities);
+  const capabilities = root.capabilities;
   for (const limitation of list(root.limitations, 0, 128)) text(limitation);
   if (expected && (canonicalJson(adapter) !== canonicalJson(expected.adapter) || canonicalJson(capabilities) !== canonicalJson(expected.capabilities))) {
     throw new Error('Game description does not match the active adapter/runtime');

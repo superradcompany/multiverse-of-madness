@@ -3,7 +3,7 @@ import { decideChess } from './decision.ts';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_POSITION } from 'chess.js';
 import { join } from 'node:path';
-import { CheckpointRecovery, EvidenceMemory, ExecutionGate, LearningLoop, WorldForks, WorldLifecycle, canonicalJson, decideCurrent, runTrials,
+import { CheckpointRecovery, EvidenceMemory, ExecutionGate, LearningLoop, WorldForks, WorldLifecycle, canonicalJson, decideCurrent, runTrials, requirePlanCapabilities,
   type DecisionModel, type LoopJudgment, type PlanDefinition } from '@multiverse/gameplay-harness';
 import { contentRevision, JsonFileStore, ReplayStore } from '@multiverse/gameplay-harness/node';
 import { ChessAdapter, type ChessExperience, type ChessPlan } from './adapter.ts';
@@ -92,6 +92,7 @@ export class ChessSession {
       },
       comparison: {
         create: async (source, candidates, judgment, limits, signal) => {
+          for (const candidate of candidates) requirePlanCapabilities(candidate.plan, this.provider.capabilities);
           const ids = candidates.map(() => `future-${randomUUID()}`);
           this.batch = { ids, baseline: structuredClone(source.state), plies: limits.plies, complete: false, provenance: structuredClone(this.pinned!.provenance) }; this.attempts.forks++;
           await this.forks.create({ parentId: source.meta.id, ids, baseline: { ...data(source), provenance: structuredClone(this.pinned!.provenance) }, objective: judgment.data.objective, plans: candidates.map(c => c.plan), plies: limits.plies }, signal);
@@ -336,7 +337,7 @@ export class ChessSession {
         this.advanceGoal(world);
         const request: ChessDecisionRequest = { temporaryGoal: this.goalContext(world), state: structuredClone(world.state), objective: capture.objective,
           candidates: structuredClone(plans), experience: this.memory.relevant(world.state, 4), revision: this.pinned!.provenance.learning?.revision ?? this.pinned!.provenance.policy };
-        return decideChess(model, request, current);
+        return decideChess(model, request, current, this.provider.capabilities);
       },
       isCurrent: capture => capture.objective === this.objective,
     }, signal);
@@ -348,6 +349,7 @@ export class ChessSession {
   private async advance(world: SessionChessWorld, plan: PlanDefinition<ChessPlan>, signal: AbortSignal, objective: string): Promise<void> {
     signal.throwIfAborted();
     if (objective !== this.objective) return;
+    requirePlanCapabilities(plan, this.provider.capabilities);
     const execution = this.adapter.start(plan), next = await this.adapter.next(execution);
     if (next.status.status !== 'running' || !next.command) return;
     signal.throwIfAborted();

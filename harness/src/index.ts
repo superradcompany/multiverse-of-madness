@@ -1,4 +1,5 @@
 export type * from './contracts.ts';
+export { validateGameCapabilities, requireGameCapabilities, requirePlanCapabilities, UnsupportedGameCapabilities } from './capabilities.ts';
 export { EvidenceMemory, type EvidencePolicy, type MemoryLimits } from './experience.ts';
 export type { ReplayPath } from './replay.ts';
 export { runTrials, type Trial, type TrialResult, type TrialRunOptions } from './trials.ts';

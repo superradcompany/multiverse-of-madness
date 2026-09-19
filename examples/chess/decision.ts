@@ -1,12 +1,13 @@
 import { advanceChessTemporaryGoal, decodeChessTemporaryGoal } from './temporary-goal.ts';
-import { canonicalJson } from '@multiverse/gameplay-harness';
+import { canonicalJson, requirePlanCapabilities, type GameCapabilities } from '@multiverse/gameplay-harness';
 import type { ChessDecisionRequest } from './preparation.ts';
 import type { ChessDecisionModel } from './revisions.ts';
 
 /** Shared live/evaluation boundary: preparation may select and annotate, never rewrite engine facts. */
-export async function decideChess(model: ChessDecisionModel, input: ChessDecisionRequest, signal: AbortSignal) {
+export async function decideChess(model: ChessDecisionModel, input: ChessDecisionRequest, signal: AbortSignal, capabilities: GameCapabilities) {
   signal.throwIfAborted();
   const request = structuredClone(input);
+  for (const plan of request.candidates) requirePlanCapabilities(plan, capabilities);
   const prepared = model.prepare ? await model.prepare(structuredClone(request), signal) : request;
   if (!same(prepared.state, request.state) || prepared.objective !== request.objective || !same(prepared.revision, request.revision)
     || !prepared.candidates.length || new Set(prepared.candidates.map(plan => plan.id)).size !== prepared.candidates.length
@@ -27,6 +28,7 @@ export async function decideChess(model: ChessDecisionModel, input: ChessDecisio
   }
   signal.throwIfAborted();
   // Keep our validated menu private from providers which mutate their arguments.
+  for (const plan of prepared.candidates) requirePlanCapabilities(plan, capabilities);
   const plans = structuredClone(prepared.candidates), answer = structuredClone(await model.decide(structuredClone(prepared), signal));
   signal.throwIfAborted();
   if (!Number.isFinite(answer.confidence) || answer.confidence < 0 || answer.confidence > 1 || !plans.some(plan => plan.id === answer.selected)

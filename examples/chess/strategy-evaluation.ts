@@ -1,6 +1,6 @@
 import { compareRevisions, canonicalJson, type BudgetLedger, type EvaluationComparison, type EvaluationContract, type EvaluationPorts, type LearningRevision } from '@multiverse/gameplay-harness';
 import { ChessAdapter, type ChessExperience } from './adapter.ts';
-import { ChessWorld, type ChessSave, type ChessState } from './runtime.ts';
+import { ChessWorld, chessWorldCapabilities, type ChessSave, type ChessState } from './runtime.ts';
 import type { ChessPolicy } from './session-types.ts';
 import type { ChessDecisionModel } from './revisions.ts';
 import { chessGoalFrame, advanceChessTemporaryGoal, type ChessTemporaryGoal } from './temporary-goal.ts';
@@ -63,7 +63,7 @@ export async function compareChessStrategies(options: {
           const result = await ledger.run({ owner: runId, operation: 'evaluation-decision', reserve: { modelCalls: 1 } }, async () => ({
             value: await decideChess(ownTurn ? strategy : opponent, { state, objective: input.objective,
               temporaryGoal: { player: input.player, frame: chessGoalFrame({ scopeId: runId, state, player: input.player, objective: input.objective, source: artifact.revision }), ...(temporaryGoal ? { current: temporaryGoal } : {}) },
-              candidates: await adapter.candidates(state), experience: structuredClone(experience.filter(item => item.fen === state.fen).slice(-4)), revision: (ownTurn ? artifact : baseline).revision }, current),
+              candidates: await adapter.candidates(state), experience: structuredClone(experience.filter(item => item.fen === state.fen).slice(-4)), revision: (ownTurn ? artifact : baseline).revision }, current, chessWorldCapabilities),
             usage: { modelCalls: 1 },
           }), current);
           temporaryGoal = result.temporaryGoal;
