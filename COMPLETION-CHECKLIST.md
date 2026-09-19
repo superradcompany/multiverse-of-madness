@@ -274,6 +274,19 @@ Doodle Shooter is a candidate, not an already working or source-accessible adapt
   checkpoints while reclaiming disposable data. Selected full-session recordings
   remain until explicit user reset/deletion, not silent retention expiry.
 
+Offline performance attribution (2026-09-19): the new executor analyzer matches
+receipt start times to a delivery-observer window, separates statuses/revisions
+and preserves missing phase measurements as unknown. The matching archived
+lineage contains 184 completed invocations with median elapsed time 390 ms:
+provisioning 183.5 ms, execution 142.0 ms and cleanup 57.1 ms (independent medians).
+The same window has 605.0 ms median delivery gaps marked as decision waits,
+versus 30.7 ms for ordinary exploration updates. The top-level journal was from
+an earlier window and cannot explain this sample. See `PERFORMANCE.md` for
+reproduction, sources and limits. This narrows the next optimization toward
+decision-path preparation/lifecycle work; it does not establish current-build
+FPS, per-decision causal attribution or a completed performance fix. No server
+or VM was started.
+
 ## 7. Complete the viewer and replay experience
 
 - [ ] Verify the deployed UI clearly shows main vs experimental vs archived worlds,
